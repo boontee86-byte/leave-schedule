@@ -73,15 +73,24 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur px-4 sm:px-6 py-3">
-        <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-full bg-leave-full/70" aria-hidden />
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-muted">Team</div>
-              <h1 className="text-lg font-medium leading-tight">{initialTeam.name}</h1>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between gap-3 sm:justify-start">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-8 w-8 shrink-0 rounded-full bg-leave-full/70" aria-hidden />
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wider text-muted">Team</div>
+                <h1 className="text-lg font-medium leading-tight truncate">{initialTeam.name}</h1>
+              </div>
             </div>
+            <button
+              onClick={logout}
+              className="sm:hidden rounded-full border border-line bg-white text-sm px-3 py-2 text-muted hover:bg-canvas shrink-0"
+              title="Sign out"
+            >
+              Sign out
+            </button>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <RangePicker
               range={range}
               onChange={setRange}
@@ -107,7 +116,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             </button>
             <button
               onClick={logout}
-              className="rounded-full border border-line bg-white text-sm px-3 py-2 text-muted hover:bg-canvas"
+              className="hidden sm:inline-flex rounded-full border border-line bg-white text-sm px-3 py-2 text-muted hover:bg-canvas"
               title="Sign out"
             >
               Sign out

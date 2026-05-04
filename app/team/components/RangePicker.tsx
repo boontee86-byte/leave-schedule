@@ -3,8 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import { format } from "date-fns";
 import { fromISO, toISO } from "@/lib/dates";
 import type { Range } from "./types";
+
+function compactRangeLabel(from: string, to: string): string {
+  const f = fromISO(from);
+  const t = fromISO(to);
+  const sameYear = f.getFullYear() === t.getFullYear();
+  const sameMonth = sameYear && f.getMonth() === t.getMonth();
+  if (sameMonth) return format(f, "MMM yyyy");
+  if (sameYear) return `${format(f, "MMM")} – ${format(t, "MMM yyyy")}`;
+  return `${format(f, "MMM yyyy")} – ${format(t, "MMM yyyy")}`;
+}
 
 type Props = {
   range: Range;
@@ -50,9 +61,10 @@ export default function RangePicker({ range, onChange, onShiftMonths }: Props) {
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded-full border border-line bg-white text-sm px-3 h-9 hover:bg-canvas tabular-nums"
+          className="rounded-full border border-line bg-white text-sm px-3 h-9 hover:bg-canvas whitespace-nowrap"
+          title={`${range.from} → ${range.to}`}
         >
-          {range.from} → {range.to}
+          {compactRangeLabel(range.from, range.to)}
         </button>
         <button
           onClick={() => onShiftMonths(1)}
