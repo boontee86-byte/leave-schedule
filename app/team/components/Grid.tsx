@@ -50,7 +50,7 @@ export default function Grid({
   let lastMonth = "";
 
   const DAY_W = 64;
-  const DATE_W = 132;
+  const DATE_W = 220;
   const colTemplate = `${DAY_W}px ${DATE_W}px repeat(${members.length}, minmax(120px, 1fr))`;
 
   return (
@@ -174,8 +174,8 @@ function RowGroup({
         <span className="font-medium text-ink/90 whitespace-nowrap tabular-nums">{dateText}</span>
         {important && important.length > 0 && (
           <span
-            className="text-[11px] rounded-full px-2 py-0.5 truncate"
-            style={{ backgroundColor: importantHex(important[0].color_key), maxWidth: 90 }}
+            className="text-[11px] rounded-full px-2 py-0.5 truncate min-w-0"
+            style={{ backgroundColor: importantHex(important[0].color_key) }}
             title={important.map((i) => i.label).join(" · ")}
           >
             {important[0].label}
