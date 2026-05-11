@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { addMonths, startOfMonth, endOfMonth } from "date-fns";
+import { addYears, startOfYear, endOfYear } from "date-fns";
 import { fromISO, toISO } from "@/lib/dates";
+import { LEAVE_META } from "@/lib/colors";
 import type { LeaveEntry, Member, ImportantDate, Range, TeamData } from "./types";
 import Grid from "./Grid";
 import Legend from "./Legend";
+import MemberSummary from "./MemberSummary";
 import LeaveModal from "./LeaveModal";
 import MemberDialog from "./MemberDialog";
 import ImportantDateDialog from "./ImportantDateDialog";
-import RangePicker from "./RangePicker";
+import YearPicker from "./YearPicker";
 
 type Props = {
   initialTeam: { id: string; name: string };
@@ -60,14 +62,16 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
     router.refresh();
   }
 
-  function shiftMonths(delta: number) {
-    const from = addMonths(fromISO(range.from), delta);
-    const to = endOfMonth(addMonths(startOfMonth(from), 2));
-    setRange({ from: toISO(startOfMonth(from)), to: toISO(to) });
+  function shiftYears(delta: number) {
+    const anchor = addYears(fromISO(range.from), delta);
+    setRange({ from: toISO(startOfYear(anchor)), to: toISO(endOfYear(anchor)) });
   }
 
   const members = useMemo<Member[]>(() => data?.members ?? [], [data]);
-  const entries = useMemo<LeaveEntry[]>(() => data?.leave_entries ?? [], [data]);
+  const entries = useMemo<LeaveEntry[]>(
+    () => (data?.leave_entries ?? []).filter((e) => e.leave_type in LEAVE_META),
+    [data],
+  );
   const important = useMemo<ImportantDate[]>(() => data?.important_dates ?? [], [data]);
 
   return (
@@ -91,10 +95,9 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <RangePicker
-              range={range}
-              onChange={setRange}
-              onShiftMonths={shiftMonths}
+            <YearPicker
+              year={fromISO(range.from).getFullYear()}
+              onShiftYears={shiftYears}
             />
             <button
               onClick={() => setLeaveModal({ mode: "create" })}
@@ -127,11 +130,13 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
 
       <main className="px-4 sm:px-6 py-5">
         <div className="grid lg:grid-cols-[1fr_240px] gap-5">
-          <section className="rounded-xl2 border border-line bg-white shadow-soft overflow-hidden">
+          <section>
             {loading && !data ? (
-              <div className="p-10 text-center text-muted text-sm">Loading schedule…</div>
+              <div className="rounded-xl2 border border-line bg-white shadow-soft p-10 text-center text-muted text-sm">
+                Loading schedule…
+              </div>
             ) : members.length === 0 ? (
-              <div className="p-10 text-center">
+              <div className="rounded-xl2 border border-line bg-white shadow-soft p-10 text-center">
                 <p className="text-sm text-muted mb-3">
                   No team members yet. Add the first one to start logging leave.
                 </p>
@@ -157,11 +162,10 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             )}
           </section>
 
-          <Legend
-            entries={entries}
-            members={members}
-            range={range}
-          />
+          <div className="lg:sticky lg:top-[88px] space-y-4 h-fit">
+            <Legend entries={entries} range={range} />
+            <MemberSummary members={members} entries={entries} />
+          </div>
         </div>
       </main>
 

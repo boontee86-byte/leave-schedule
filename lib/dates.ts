@@ -1,11 +1,10 @@
 import {
   addDays,
-  addMonths,
-  endOfMonth,
+  endOfYear,
   format,
   isSameDay,
   parseISO,
-  startOfMonth,
+  startOfYear,
 } from "date-fns";
 
 export const ISO = "yyyy-MM-dd";
@@ -19,9 +18,7 @@ export function fromISO(s: string): Date {
 }
 
 export function defaultRange(today = new Date()): { from: string; to: string } {
-  const from = startOfMonth(today);
-  const to = endOfMonth(addMonths(today, 2));
-  return { from: toISO(from), to: toISO(to) };
+  return { from: toISO(startOfYear(today)), to: toISO(endOfYear(today)) };
 }
 
 export function expandRange(fromISOStr: string, toISOStr: string): Date[] {
@@ -32,6 +29,17 @@ export function expandRange(fromISOStr: string, toISOStr: string): Date[] {
     out.push(d);
   }
   return out;
+}
+
+export function groupDatesByMonth(dates: Date[]): { label: string; days: Date[] }[] {
+  const groups: { label: string; days: Date[] }[] = [];
+  for (const d of dates) {
+    const label = monthLabel(d);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.days.push(d);
+    else groups.push({ label, days: [d] });
+  }
+  return groups;
 }
 
 export function isWeekend(d: Date): boolean {

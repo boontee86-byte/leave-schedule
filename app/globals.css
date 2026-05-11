@@ -39,6 +39,9 @@ body {
 .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
   background-color: var(--rdp-background-color);
 }
+.rdp-month_caption {
+  padding-left: 0.5rem;
+}
 
 /* Sticky scrollbar polish */
 ::-webkit-scrollbar {

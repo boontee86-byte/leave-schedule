@@ -156,15 +156,15 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
                   key={t}
                   type="button"
                   onClick={() => setType(t)}
-                  className={`flex items-center gap-2 text-sm rounded-lg border px-3 py-2 transition ${
+                  className={`flex items-center gap-2 text-sm rounded-lg border px-3 transition text-left min-h-[56px] ${
                     active ? "border-ink/50 bg-canvas" : "border-line bg-white hover:bg-canvas/60"
                   }`}
                 >
                   <span
-                    className="inline-block h-3.5 w-3.5 rounded"
+                    className="inline-block h-3.5 w-3.5 rounded shrink-0"
                     style={{ backgroundColor: meta.color }}
                   />
-                  <span>{meta.label}</span>
+                  <span className="leading-tight">{meta.label}</span>
                 </button>
               );
             })}
@@ -191,7 +191,17 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
           <label className="block text-xs uppercase tracking-wide text-muted mb-1.5">
             {isEdit ? "Date" : "Pick date(s)"}
           </label>
-          <div className="rounded-lg border border-line p-2 bg-white">
+          <div
+            className="rounded-lg border border-line px-3 py-3 bg-white flex justify-center"
+            style={
+              {
+                "--rdp-day-width": "34px",
+                "--rdp-day-height": "34px",
+                "--rdp-day_button-width": "32px",
+                "--rdp-day_button-height": "32px",
+              } as React.CSSProperties
+            }
+          >
             {isEdit ? (
               <DayPicker
                 mode="single"
