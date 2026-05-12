@@ -120,6 +120,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
               members={members}
               value={memberFilter}
               onChange={setMemberFilter}
+              onReload={() => reload()}
             />
             <button
               onClick={() => setLeaveModal({ mode: "create" })}

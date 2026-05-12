@@ -23,7 +23,7 @@ export const LEAVE_META: Record<
   { label: string; short: string; color: string; textColor: string }
 > = {
   full_day:       { label: "Full day",                 short: "FD", color: ANNUAL_COLOR,    textColor: "#2F4A2C" },
-  full_day_block: { label: "Full day (Block Leave)",   short: "BL", color: BLOCK_COLOR,     textColor: "#1F3A1D" },
+  full_day_block: { label: "Full day (Mandatory Leave)", short: "ML", color: BLOCK_COLOR,    textColor: "#1F3A1D" },
   half_day_am:    { label: "Half day (AM)",            short: "AM", color: ANNUAL_COLOR,    textColor: "#2F4A2C" },
   half_day_pm:    { label: "Half day (PM)",            short: "PM", color: ANNUAL_COLOR,    textColor: "#2F4A2C" },
   medical:        { label: "Medical leave",            short: "M",  color: MEDICAL_COLOR,   textColor: "#5A2A35" },

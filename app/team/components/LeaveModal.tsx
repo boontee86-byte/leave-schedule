@@ -26,7 +26,7 @@ const CATEGORIES: { value: LeaveCategory; label: string }[] = [
   { value: "annual",    label: "Annual leave" },
   { value: "medical",   label: "Medical leave" },
   { value: "childcare", label: "Family / Childcare" },
-  { value: "block",     label: "Block leave" },
+  { value: "block",     label: "Mandatory leave" },
 ];
 
 const PERIODS: { value: LeavePeriod; label: string }[] = [
@@ -60,10 +60,6 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
   const [notes, setNotes] = useState<string>(initialEntry?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [removeMode, setRemoveMode] = useState<"single" | "range">("single");
-  const [removeRange, setRemoveRange] = useState<DateRange | undefined>(
-    isEdit ? { from: initialDate, to: initialDate } : undefined,
-  );
 
   const periodAllowed = category !== "block";
   const effectivePeriod: LeavePeriod = periodAllowed ? period : "full";
@@ -105,27 +101,16 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
     }
   }
 
-  async function removeSingle() {
+  async function remove() {
     if (!isEdit) return;
-    if (!confirm("Remove this leave entry?")) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/leave/${initialEntry!.id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
-      onSaved();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
-      setBusy(false);
-    }
-  }
-
-  async function removeRangeSubmit() {
-    if (!isEdit) return;
-    if (!removeRange?.from) return setError("Pick a date range to remove");
-    const from = toISO(removeRange.from);
-    const to = toISO(removeRange.to ?? removeRange.from);
-    if (!confirm(`Remove all leave for this member from ${from} to ${to}?`)) return;
+    if (!range?.from) return setError("Pick a date or range to remove");
+    const from = toISO(range.from);
+    const to = toISO(range.to ?? range.from);
+    const prompt =
+      from === to
+        ? `Remove all leave for this member on ${from}?`
+        : `Remove all leave for this member from ${from} to ${to}?`;
+    if (!confirm(prompt)) return;
     setBusy(true);
     setError(null);
     try {
@@ -152,23 +137,14 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             {isEdit && (
-              <>
-                <button
-                  onClick={removeSingle}
-                  disabled={busy}
-                  className="text-sm hover:underline"
-                  style={{ color: "#5A2A35" }}
-                >
-                  Remove this day
-                </button>
-                <button
-                  onClick={() => setRemoveMode((m) => (m === "range" ? "single" : "range"))}
-                  disabled={busy}
-                  className="text-sm hover:underline text-muted"
-                >
-                  {removeMode === "range" ? "Hide range remove" : "Remove range…"}
-                </button>
-              </>
+              <button
+                onClick={remove}
+                disabled={busy}
+                className="text-sm hover:underline"
+                style={{ color: "#5A2A35" }}
+              >
+                Remove
+              </button>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -278,7 +254,7 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
 
         <div>
           <label className="block text-xs uppercase tracking-wide text-muted mb-1.5">
-            {isEdit ? "Date" : "Pick date(s)"}
+            {isEdit ? "Pick day(s) to remove" : "Pick date(s)"}
           </label>
           <div
             className="rounded-lg border border-line px-3 py-3 bg-white flex justify-center"
@@ -291,59 +267,19 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
               } as React.CSSProperties
             }
           >
-            {isEdit ? (
-              <DayPicker
-                mode="single"
-                selected={initialDate}
-                disabled
-              />
-            ) : (
-              <DayPicker
-                mode="range"
-                selected={range}
-                onSelect={setRange}
-                weekStartsOn={1}
-                showOutsideDays
-              />
-            )}
+            <DayPicker
+              mode="range"
+              selected={range}
+              onSelect={setRange}
+              weekStartsOn={1}
+              showOutsideDays
+            />
           </div>
-          {!isEdit && (
-            <p className="text-xs text-muted mt-2">
-              Pick a single day or drag to select a range. Weekends and public
-              holidays are skipped automatically.
-            </p>
-          )}
-
-          {isEdit && removeMode === "range" && (
-            <div className="mt-4 rounded-lg border border-line bg-canvas/40 p-3">
-              <div className="text-xs uppercase tracking-wide text-muted mb-2">
-                Remove range
-              </div>
-              <p className="text-xs text-muted mb-2">
-                Deletes every leave entry for this member between the picked
-                dates (any leave type).
-              </p>
-              <div className="flex justify-center bg-white rounded-lg border border-line p-2">
-                <DayPicker
-                  mode="range"
-                  selected={removeRange}
-                  onSelect={setRemoveRange}
-                  weekStartsOn={1}
-                  showOutsideDays
-                />
-              </div>
-              <div className="mt-2 flex justify-end">
-                <button
-                  onClick={removeRangeSubmit}
-                  disabled={busy || !removeRange?.from}
-                  className="text-sm rounded-full px-4 py-2 border border-line bg-white hover:bg-canvas disabled:opacity-60"
-                  style={{ color: "#5A2A35" }}
-                >
-                  Remove range
-                </button>
-              </div>
-            </div>
-          )}
+          <p className="text-xs text-muted mt-2">
+            {isEdit
+              ? "Click a day or drag to select a range, then Remove to delete all leave for this member in that period."
+              : "Pick a single day or drag to select a range. Weekends and public holidays are skipped automatically."}
+          </p>
         </div>
       </div>
     </Modal>

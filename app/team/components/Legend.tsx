@@ -21,7 +21,7 @@ type CategoryRow = {
 
 const CATEGORY_ROWS: CategoryRow[] = [
   { key: "annual",    label: "Annual leave",      color: LEAVE_META.full_day.color },
-  { key: "block",     label: "Block leave",       color: LEAVE_META.full_day_block.color },
+  { key: "block",     label: "Mandatory leave",   color: LEAVE_META.full_day_block.color },
   { key: "medical",   label: "Medical leave",     color: LEAVE_META.medical.color },
   { key: "childcare", label: "Family / Childcare", color: LEAVE_META.childcare.color },
 ];
