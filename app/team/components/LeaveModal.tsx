@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { DayPicker, type DateRange } from "react-day-picker";
 import "react-day-picker/dist/style.css";
-import { LEAVE_META, LEAVE_TYPES, type LeaveType } from "@/lib/colors";
+import {
+  LEAVE_META,
+  categoryAndPeriod,
+  toLeaveType,
+  type LeaveCategory,
+  type LeavePeriod,
+} from "@/lib/colors";
 import { fromISO, toISO } from "@/lib/dates";
 import type { LeaveEntry, Member } from "./types";
 import type { LeaveModalState } from "./Dashboard";
@@ -16,9 +22,26 @@ type Props = {
   onSaved: () => void;
 };
 
+const CATEGORIES: { value: LeaveCategory; label: string }[] = [
+  { value: "annual",    label: "Annual leave" },
+  { value: "medical",   label: "Medical leave" },
+  { value: "childcare", label: "Family / Childcare" },
+  { value: "block",     label: "Block leave" },
+];
+
+const PERIODS: { value: LeavePeriod; label: string }[] = [
+  { value: "full", label: "Full day" },
+  { value: "am",   label: "Half day (AM)" },
+  { value: "pm",   label: "Half day (PM)" },
+];
+
 export default function LeaveModal({ state, members, onClose, onSaved }: Props) {
   const isEdit = state.mode === "edit";
   const initialEntry: LeaveEntry | null = isEdit ? state.entry : null;
+
+  const initialCatPeriod = isEdit
+    ? categoryAndPeriod(initialEntry!.leave_type)
+    : { category: "annual" as LeaveCategory, period: "full" as LeavePeriod };
 
   const [memberId, setMemberId] = useState<string>(
     isEdit ? initialEntry!.member_id : state.member_id ?? members[0]?.id ?? "",
@@ -32,12 +55,19 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
     from: initialDate,
     to: initialDate,
   });
-  const [type, setType] = useState<LeaveType>(
-    isEdit ? initialEntry!.leave_type : "full_day",
-  );
+  const [category, setCategory] = useState<LeaveCategory>(initialCatPeriod.category);
+  const [period, setPeriod] = useState<LeavePeriod>(initialCatPeriod.period);
   const [notes, setNotes] = useState<string>(initialEntry?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [removeMode, setRemoveMode] = useState<"single" | "range">("single");
+  const [removeRange, setRemoveRange] = useState<DateRange | undefined>(
+    isEdit ? { from: initialDate, to: initialDate } : undefined,
+  );
+
+  const periodAllowed = category !== "block";
+  const effectivePeriod: LeavePeriod = periodAllowed ? period : "full";
+  const leaveType = toLeaveType(category, effectivePeriod);
 
   async function save() {
     setError(null);
@@ -49,7 +79,7 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
         const res = await fetch(`/api/leave/${initialEntry!.id}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ leave_type: type, notes: notes || null }),
+          body: JSON.stringify({ leave_type: leaveType, notes: notes || null }),
         });
         if (!res.ok) throw new Error((await res.json()).error || "Save failed");
       } else {
@@ -62,7 +92,7 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
             member_id: memberId,
             from,
             to,
-            leave_type: type,
+            leave_type: leaveType,
             notes: notes || null,
           }),
         });
@@ -75,12 +105,36 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
     }
   }
 
-  async function remove() {
+  async function removeSingle() {
     if (!isEdit) return;
     if (!confirm("Remove this leave entry?")) return;
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`/api/leave/${initialEntry!.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed");
+      setBusy(false);
+    }
+  }
+
+  async function removeRangeSubmit() {
+    if (!isEdit) return;
+    if (!removeRange?.from) return setError("Pick a date range to remove");
+    const from = toISO(removeRange.from);
+    const to = toISO(removeRange.to ?? removeRange.from);
+    if (!confirm(`Remove all leave for this member from ${from} to ${to}?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const qs = new URLSearchParams({
+        member_id: initialEntry!.member_id,
+        from,
+        to,
+      });
+      const res = await fetch(`/api/leave?${qs.toString()}`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
       onSaved();
     } catch (err) {
@@ -95,17 +149,26 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
       onClose={onClose}
       wide
       footer={
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
             {isEdit && (
-              <button
-                onClick={remove}
-                disabled={busy}
-                className="text-sm hover:underline"
-                style={{ color: "#5A2A35" }}
-              >
-                Remove
-              </button>
+              <>
+                <button
+                  onClick={removeSingle}
+                  disabled={busy}
+                  className="text-sm hover:underline"
+                  style={{ color: "#5A2A35" }}
+                >
+                  Remove this day
+                </button>
+                <button
+                  onClick={() => setRemoveMode((m) => (m === "range" ? "single" : "range"))}
+                  disabled={busy}
+                  className="text-sm hover:underline text-muted"
+                >
+                  {removeMode === "range" ? "Hide range remove" : "Remove range…"}
+                </button>
+              </>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -148,15 +211,16 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
             Leave type
           </label>
           <div className="grid grid-cols-2 gap-2">
-            {LEAVE_TYPES.map((t) => {
-              const meta = LEAVE_META[t];
-              const active = t === type;
+            {CATEGORIES.map((c) => {
+              const previewType = toLeaveType(c.value, "full");
+              const meta = LEAVE_META[previewType];
+              const active = c.value === category;
               return (
                 <button
-                  key={t}
+                  key={c.value}
                   type="button"
-                  onClick={() => setType(t)}
-                  className={`flex items-center gap-2 text-sm rounded-lg border px-3 transition text-left min-h-[56px] ${
+                  onClick={() => setCategory(c.value)}
+                  className={`flex items-center gap-2 text-sm rounded-lg border px-3 transition text-left min-h-[48px] ${
                     active ? "border-ink/50 bg-canvas" : "border-line bg-white hover:bg-canvas/60"
                   }`}
                 >
@@ -164,11 +228,36 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
                     className="inline-block h-3.5 w-3.5 rounded shrink-0"
                     style={{ backgroundColor: meta.color }}
                   />
-                  <span className="leading-tight">{meta.label}</span>
+                  <span className="leading-tight">{c.label}</span>
                 </button>
               );
             })}
           </div>
+
+          {periodAllowed && (
+            <>
+              <label className="block text-xs uppercase tracking-wide text-muted mb-1.5 mt-4">
+                Duration
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {PERIODS.map((p) => {
+                  const active = p.value === period;
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setPeriod(p.value)}
+                      className={`text-sm rounded-lg border px-3 py-2 transition ${
+                        active ? "border-ink/50 bg-canvas" : "border-line bg-white hover:bg-canvas/60"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           <label className="block text-xs uppercase tracking-wide text-muted mb-1.5 mt-4">
             Notes (optional)
@@ -220,8 +309,40 @@ export default function LeaveModal({ state, members, onClose, onSaved }: Props) 
           </div>
           {!isEdit && (
             <p className="text-xs text-muted mt-2">
-              Pick a single day or drag to select a range. One entry will be created per date.
+              Pick a single day or drag to select a range. Weekends and public
+              holidays are skipped automatically.
             </p>
+          )}
+
+          {isEdit && removeMode === "range" && (
+            <div className="mt-4 rounded-lg border border-line bg-canvas/40 p-3">
+              <div className="text-xs uppercase tracking-wide text-muted mb-2">
+                Remove range
+              </div>
+              <p className="text-xs text-muted mb-2">
+                Deletes every leave entry for this member between the picked
+                dates (any leave type).
+              </p>
+              <div className="flex justify-center bg-white rounded-lg border border-line p-2">
+                <DayPicker
+                  mode="range"
+                  selected={removeRange}
+                  onSelect={setRemoveRange}
+                  weekStartsOn={1}
+                  showOutsideDays
+                />
+              </div>
+              <div className="mt-2 flex justify-end">
+                <button
+                  onClick={removeRangeSubmit}
+                  disabled={busy || !removeRange?.from}
+                  className="text-sm rounded-full px-4 py-2 border border-line bg-white hover:bg-canvas disabled:opacity-60"
+                  style={{ color: "#5A2A35" }}
+                >
+                  Remove range
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

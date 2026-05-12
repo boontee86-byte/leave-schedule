@@ -13,6 +13,7 @@ import LeaveModal from "./LeaveModal";
 import MemberDialog from "./MemberDialog";
 import ImportantDateDialog from "./ImportantDateDialog";
 import YearPicker from "./YearPicker";
+import MemberFilter from "./MemberFilter";
 
 type Props = {
   initialTeam: { id: string; name: string };
@@ -31,6 +32,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
   const [leaveModal, setLeaveModal] = useState<LeaveModalState | null>(null);
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
   const [importantOpen, setImportantOpen] = useState<{ date?: string } | null>(null);
+  const [memberFilter, setMemberFilter] = useState<string[]>([]);
 
   const reload = useCallback(
     async (r: Range = range) => {
@@ -74,6 +76,19 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
   );
   const important = useMemo<ImportantDate[]>(() => data?.important_dates ?? [], [data]);
 
+  useEffect(() => {
+    if (memberFilter.length === 0) return;
+    const valid = new Set(members.map((m) => m.id));
+    const filtered = memberFilter.filter((id) => valid.has(id));
+    if (filtered.length !== memberFilter.length) setMemberFilter(filtered);
+  }, [members, memberFilter]);
+
+  const visibleMembers = useMemo<Member[]>(() => {
+    if (memberFilter.length === 0) return members;
+    const set = new Set(memberFilter);
+    return members.filter((m) => set.has(m.id));
+  }, [members, memberFilter]);
+
   return (
     <div className="min-h-screen bg-canvas text-ink">
       <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur px-4 sm:px-6 py-3">
@@ -98,6 +113,11 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             <YearPicker
               year={fromISO(range.from).getFullYear()}
               onShiftYears={shiftYears}
+            />
+            <MemberFilter
+              members={members}
+              value={memberFilter}
+              onChange={setMemberFilter}
             />
             <button
               onClick={() => setLeaveModal({ mode: "create" })}
@@ -150,7 +170,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             ) : (
               <Grid
                 range={range}
-                members={members}
+                members={visibleMembers}
                 entries={entries}
                 important={important}
                 onCellClick={(member_id, date) =>
@@ -163,8 +183,8 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
           </section>
 
           <div className="lg:sticky lg:top-[88px] space-y-4 h-fit">
-            <Legend entries={entries} range={range} />
-            <MemberSummary members={members} entries={entries} />
+            <Legend range={range} />
+            <MemberSummary members={visibleMembers} entries={entries} />
           </div>
         </div>
       </main>

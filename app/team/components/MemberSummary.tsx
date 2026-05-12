@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import { fromISO, isWeekend } from "@/lib/dates";
+import { isPublicHoliday } from "@/lib/holidays";
 import type { LeaveEntry, Member } from "./types";
 
 type Props = {
@@ -25,6 +27,7 @@ export default function MemberSummary({ members, entries }: Props) {
     for (const e of entries) {
       const b = map.get(e.member_id);
       if (!b) continue;
+      if (isWeekend(fromISO(e.date)) || isPublicHoliday(e.date)) continue;
       switch (e.leave_type) {
         case "full_day":
         case "full_day_block":
@@ -37,8 +40,16 @@ export default function MemberSummary({ members, entries }: Props) {
         case "childcare":
           b.family += 1;
           break;
+        case "childcare_am":
+        case "childcare_pm":
+          b.family += 0.5;
+          break;
         case "medical":
           b.medical += 1;
+          break;
+        case "medical_am":
+        case "medical_pm":
+          b.medical += 0.5;
           break;
       }
     }

@@ -2,7 +2,15 @@
 
 import { useMemo } from "react";
 import { expandRange, groupDatesByMonth, isWeekend, toISO } from "@/lib/dates";
-import { LEAVE_META, importantHex } from "@/lib/colors";
+import {
+  AM_TYPES,
+  LEAVE_META,
+  PM_TYPES,
+  PUBLIC_HOLIDAY_COLOR,
+  WEEKEND_COLOR,
+  importantHex,
+} from "@/lib/colors";
+import { holidayFor } from "@/lib/holidays";
 import type { LeaveEntry, ImportantDate, Member, Range } from "./types";
 
 type Props = {
@@ -19,7 +27,7 @@ const MEMBER_COL = 120;
 const CELL = 22;
 const GAP = 3;
 const EMPTY_BG = "#ebedf0";
-const WEEKEND_BG = "#c8ccd1";
+const STICKY_SHADOW = "2px 0 4px -2px rgba(0,0,0,0.08)";
 
 export default function Grid({
   range,
@@ -111,7 +119,7 @@ function MonthGrid({
           }}
         >
           {/* Day-of-week header row */}
-          <div className="bg-canvas" />
+          <div className="sticky left-0 z-20 bg-canvas" style={{ boxShadow: STICKY_SHADOW }} />
           {days.map((d) => {
             const we = isWeekend(d);
             return (
@@ -128,34 +136,37 @@ function MonthGrid({
           })}
 
           {/* Day-number header row */}
-          <div className="sticky left-0 z-20 bg-canvas" />
+          <div className="sticky left-0 z-20 bg-canvas" style={{ boxShadow: STICKY_SHADOW }} />
           {days.map((d) => {
             const iso = toISO(d);
             const we = isWeekend(d);
             const imp = byDate.get(iso);
             const accent = imp?.[0];
-            const tooltip =
-              imp && imp.length > 0
-                ? imp
-                    .map((i) => `${i.label}${i.notes ? ` — ${i.notes}` : ""}`)
-                    .join("\n")
-                : "Click to mark as important";
+            const ph = holidayFor(iso);
+            const labels: string[] = [];
+            if (ph) labels.push(`Public holiday — ${ph.label}`);
+            if (imp && imp.length > 0) {
+              for (const i of imp) labels.push(`${i.label}${i.notes ? ` — ${i.notes}` : ""}`);
+            }
+            const tooltip = labels.length > 0 ? labels.join("\n") : "Click to mark as important";
+            const showAccent = accent || ph;
+            const accentBg = accent ? importantHex(accent.color_key) : PUBLIC_HOLIDAY_COLOR;
             return (
               <button
                 key={`day-${iso}`}
                 type="button"
                 onClick={() => onDateLabelClick(iso)}
                 className={`text-center text-[11px] tabular-nums py-[1px] rounded-[3px] hover:bg-canvas transition flex items-center justify-center ${
-                  we ? "text-ink/90 font-medium" : "text-ink/70 hover:text-ink"
+                  we || ph ? "text-ink/90 font-medium" : "text-ink/70 hover:text-ink"
                 }`}
                 style={{ width: CELL, height: 18 }}
                 title={tooltip}
               >
-                {accent ? (
+                {showAccent ? (
                   <span
                     className="inline-flex items-center justify-center rounded-full font-semibold text-ink"
                     style={{
-                      backgroundColor: importantHex(accent.color_key),
+                      backgroundColor: accentBg,
                       width: 18,
                       height: 18,
                     }}
@@ -203,7 +214,7 @@ function MemberRow({
     <>
       <div
         className="sticky left-0 z-10 bg-canvas pr-2 flex items-center text-[13px] text-ink/90 truncate"
-        style={{ height: CELL }}
+        style={{ height: CELL, boxShadow: STICKY_SHADOW }}
         title={member.name}
       >
         {member.name}
@@ -211,11 +222,13 @@ function MemberRow({
       {days.map((d) => {
         const iso = toISO(d);
         const cellEntries = byCell.get(`${member.id}|${iso}`) ?? [];
+        const ph = holidayFor(iso);
         return (
           <DayCell
             key={member.id + iso}
             iso={iso}
             weekend={isWeekend(d)}
+            holidayLabel={ph?.label}
             entries={cellEntries}
             onEmptyClick={() => onCellClick(member.id, iso)}
             onEntryClick={onEntryClick}
@@ -229,12 +242,14 @@ function MemberRow({
 function DayCell({
   iso,
   weekend,
+  holidayLabel,
   entries,
   onEmptyClick,
   onEntryClick,
 }: {
   iso: string;
   weekend: boolean;
+  holidayLabel?: string;
   entries: LeaveEntry[];
   onEmptyClick: () => void;
   onEntryClick: (entry: LeaveEntry) => void;
@@ -244,7 +259,26 @@ function DayCell({
     height: CELL,
     borderRadius: 3,
   };
-  const bg = weekend ? WEEKEND_BG : EMPTY_BG;
+
+  if (weekend) {
+    return (
+      <div
+        style={{ ...baseStyle, backgroundColor: WEEKEND_COLOR }}
+        title="Weekend"
+        aria-label="Weekend"
+      />
+    );
+  }
+
+  if (holidayLabel) {
+    return (
+      <div
+        style={{ ...baseStyle, backgroundColor: PUBLIC_HOLIDAY_COLOR }}
+        title={`Public holiday — ${holidayLabel}`}
+        aria-label={`Public holiday — ${holidayLabel}`}
+      />
+    );
+  }
 
   if (entries.length === 0) {
     return (
@@ -252,7 +286,7 @@ function DayCell({
         type="button"
         onClick={onEmptyClick}
         className="hover:ring-2 hover:ring-ink/20 transition"
-        style={{ ...baseStyle, backgroundColor: bg }}
+        style={{ ...baseStyle, backgroundColor: EMPTY_BG }}
         aria-label={`Log leave on ${iso}`}
       />
     );
@@ -271,7 +305,7 @@ function DayCell({
       onClick={() => onEntryClick(entries[0])}
       title={tooltip}
       className="hover:ring-2 hover:ring-ink/30 transition"
-      style={{ ...baseStyle, ...renderFill(entries, bg) }}
+      style={{ ...baseStyle, ...renderFill(entries, EMPTY_BG) }}
     />
   );
 }
@@ -280,12 +314,12 @@ function renderFill(entries: LeaveEntry[], emptyBg: string): React.CSSProperties
   if (entries.length === 1) {
     const e = entries[0];
     const color = LEAVE_META[e.leave_type].color;
-    if (e.leave_type === "half_day_am") {
+    if (AM_TYPES.has(e.leave_type)) {
       return {
         background: `linear-gradient(to right, ${color} 50%, ${emptyBg} 50%)`,
       };
     }
-    if (e.leave_type === "half_day_pm") {
+    if (PM_TYPES.has(e.leave_type)) {
       return {
         background: `linear-gradient(to right, ${emptyBg} 50%, ${color} 50%)`,
       };
