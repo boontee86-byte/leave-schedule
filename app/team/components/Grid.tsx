@@ -65,7 +65,7 @@ export default function Grid({
   }, [important]);
 
   return (
-    <div className="flex flex-col gap-7">
+    <div className="flex flex-col gap-7 min-w-0">
       {months.map((m) => (
         <MonthGrid
           key={m.label}

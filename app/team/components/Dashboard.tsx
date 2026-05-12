@@ -153,7 +153,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
 
       <main className="px-4 sm:px-6 py-5">
         <div className="grid lg:grid-cols-[1fr_240px] gap-5">
-          <section>
+          <section className="min-w-0">
             {loading && !data ? (
               <div className="rounded-xl2 border border-line bg-white shadow-soft p-10 text-center text-muted text-sm">
                 Loading schedule…
