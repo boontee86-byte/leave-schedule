@@ -13,6 +13,8 @@ type Props = {
 export default function MemberFilter({ members, value, onChange, onReload }: Props) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -43,22 +45,32 @@ export default function MemberFilter({ members, value, onChange, onReload }: Pro
     }
   }
 
-  async function move(index: number, delta: -1 | 1) {
-    const target = index + delta;
-    if (target < 0 || target >= members.length) return;
-    const order = members.map((m) => m.id);
-    [order[index], order[target]] = [order[target], order[index]];
+  async function commitOrder(newOrder: string[]) {
     setBusy(true);
     try {
       const res = await fetch("/api/members/reorder", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ids: order }),
+        body: JSON.stringify({ ids: newOrder }),
       });
       if (res.ok) onReload();
     } finally {
       setBusy(false);
     }
+  }
+
+  function onDrop(targetId: string) {
+    const sourceId = dragId;
+    setDragId(null);
+    setOverId(null);
+    if (!sourceId || sourceId === targetId) return;
+    const ids = members.map((m) => m.id);
+    const from = ids.indexOf(sourceId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, sourceId);
+    commitOrder(ids);
   }
 
   return (
@@ -84,17 +96,51 @@ export default function MemberFilter({ members, value, onChange, onReload }: Pro
             All members
           </button>
           <div className="my-1 border-t border-line" />
-          {members.map((m, i) => {
+          {members.map((m) => {
             const checked = selectedSet.has(m.id);
-            const isFirst = i === 0;
-            const isLast = i === members.length - 1;
+            const isDragging = dragId === m.id;
+            const isOver = overId === m.id && dragId !== null && dragId !== m.id;
             return (
               <div
                 key={m.id}
-                className={`flex items-center gap-1 text-sm rounded-lg pl-3 pr-1 py-1.5 hover:bg-canvas ${
+                draggable={!busy}
+                onDragStart={(e) => {
+                  setDragId(m.id);
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", m.id);
+                }}
+                onDragEnter={() => {
+                  if (dragId && dragId !== m.id) setOverId(m.id);
+                }}
+                onDragOver={(e) => {
+                  if (!dragId) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDragLeave={() => {
+                  setOverId((cur) => (cur === m.id ? null : cur));
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  onDrop(m.id);
+                }}
+                onDragEnd={() => {
+                  setDragId(null);
+                  setOverId(null);
+                }}
+                className={`flex items-center gap-2 text-sm rounded-lg pl-2 pr-3 py-1.5 hover:bg-canvas transition-colors ${
                   checked ? "bg-canvas/70" : ""
+                } ${isDragging ? "opacity-40" : ""} ${
+                  isOver ? "ring-2 ring-ink/40 bg-canvas" : ""
                 }`}
               >
+                <span
+                  className="text-muted select-none leading-none cursor-grab active:cursor-grabbing"
+                  title="Drag to reorder"
+                  aria-hidden
+                >
+                  ⋮⋮
+                </span>
                 <label className="flex flex-1 min-w-0 items-center gap-2 cursor-pointer" title={m.name}>
                   <input
                     type="checkbox"
@@ -104,26 +150,6 @@ export default function MemberFilter({ members, value, onChange, onReload }: Pro
                   />
                   <span className="truncate">{m.name}</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => move(i, -1)}
-                  disabled={busy || isFirst}
-                  title="Move up"
-                  aria-label={`Move ${m.name} up`}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-canvas disabled:opacity-30 disabled:hover:bg-transparent"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(i, 1)}
-                  disabled={busy || isLast}
-                  title="Move down"
-                  aria-label={`Move ${m.name} down`}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded text-muted hover:text-ink hover:bg-canvas disabled:opacity-30 disabled:hover:bg-transparent"
-                >
-                  ↓
-                </button>
               </div>
             );
           })}
