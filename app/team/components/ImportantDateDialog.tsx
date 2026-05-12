@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { DayPicker, type DateRange } from "react-day-picker";
+import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { IMPORTANT_COLORS, importantHex } from "@/lib/colors";
 import { fromISO, toISO } from "@/lib/dates";
@@ -10,6 +10,7 @@ import Modal from "./Modal";
 
 type Props = {
   presetDate?: string;
+  editing?: ImportantDate;
   existing: ImportantDate[];
   onClose: () => void;
   onChanged: () => void;
@@ -17,43 +18,62 @@ type Props = {
 
 export default function ImportantDateDialog({
   presetDate,
+  editing,
   existing,
   onClose,
   onChanged,
 }: Props) {
-  const initial = presetDate ? fromISO(presetDate) : new Date();
-  const [range, setRange] = useState<DateRange | undefined>({
-    from: initial,
-    to: initial,
-  });
-  const [label, setLabel] = useState("");
-  const [colorKey, setColorKey] = useState<string>(IMPORTANT_COLORS[0].key);
-  const [notes, setNotes] = useState("");
+  const initial = editing
+    ? fromISO(editing.date)
+    : presetDate
+      ? fromISO(presetDate)
+      : new Date();
+  const [date, setDate] = useState<Date | undefined>(initial);
+  const [label, setLabel] = useState(editing?.label ?? "");
+  const [colorKey, setColorKey] = useState<string>(
+    editing?.color_key ?? IMPORTANT_COLORS[0].key,
+  );
+  const [notes, setNotes] = useState(editing?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onPreset = useMemo(
-    () => (presetDate ? existing.filter((e) => e.date === presetDate) : []),
-    [existing, presetDate],
+    () =>
+      presetDate && !editing
+        ? existing.filter((e) => e.date === presetDate)
+        : [],
+    [existing, presetDate, editing],
   );
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!range?.from) return setError("Pick a date");
+    if (!date) return setError("Pick a date");
     setBusy(true);
     try {
-      const res = await fetch("/api/important-dates", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          from: toISO(range.from),
-          to: toISO(range.to ?? range.from),
-          label: label.trim(),
-          color_key: colorKey,
-          notes: notes || null,
-        }),
-      });
+      const iso = toISO(date);
+      const res = editing
+        ? await fetch(`/api/important-dates/${editing.id}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              date: iso,
+              label: label.trim(),
+              color_key: colorKey,
+              notes: notes || null,
+            }),
+          })
+        : await fetch("/api/important-dates", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              from: iso,
+              to: iso,
+              label: label.trim(),
+              color_key: colorKey,
+              notes: notes || null,
+            }),
+          });
       if (!res.ok) throw new Error((await res.json()).error || "Save failed");
       onChanged();
       onClose();
@@ -64,12 +84,12 @@ export default function ImportantDateDialog({
   }
 
   async function removeOne(id: string) {
-    if (!confirm("Remove this important date?")) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/important-dates/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error((await res.json()).error || "Delete failed");
       onChanged();
+      if (editing && id === editing.id) onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
     } finally {
@@ -79,24 +99,37 @@ export default function ImportantDateDialog({
 
   return (
     <Modal
-      title="Mark important date"
+      title={editing ? "Edit important date" : "Mark important date"}
       onClose={onClose}
       wide
       footer={
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="text-sm rounded-full px-4 py-2 border border-line bg-white"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={save}
-            disabled={busy}
-            className="text-sm rounded-full px-4 py-2 bg-ink text-white disabled:opacity-60"
-          >
-            {busy ? "Saving…" : "Save"}
-          </button>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            {editing && (
+              <button
+                onClick={() => removeOne(editing.id)}
+                disabled={busy}
+                className="text-sm rounded-full px-4 py-2 border border-line bg-white text-muted hover:text-ink"
+              >
+                Delete
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="text-sm rounded-full px-4 py-2 border border-line bg-white"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={save}
+              disabled={busy}
+              className="text-sm rounded-full px-4 py-2 bg-ink text-white disabled:opacity-60"
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
       }
     >
@@ -184,13 +217,13 @@ export default function ImportantDateDialog({
 
         <div>
           <label className="block text-xs uppercase tracking-wide text-muted mb-1.5">
-            Date(s)
+            Date
           </label>
           <div className="rounded-lg border border-line p-2 bg-white">
             <DayPicker
-              mode="range"
-              selected={range}
-              onSelect={setRange}
+              mode="single"
+              selected={date}
+              onSelect={setDate}
               weekStartsOn={1}
               showOutsideDays
             />

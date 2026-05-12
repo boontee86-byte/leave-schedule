@@ -31,7 +31,9 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
   const [loading, setLoading] = useState(true);
   const [leaveModal, setLeaveModal] = useState<LeaveModalState | null>(null);
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
-  const [importantOpen, setImportantOpen] = useState<{ date?: string } | null>(null);
+  const [importantOpen, setImportantOpen] = useState<
+    { date?: string; editing?: ImportantDate } | null
+  >(null);
   const [memberFilter, setMemberFilter] = useState<string[]>([]);
 
   const reload = useCallback(
@@ -183,7 +185,12 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
           </section>
 
           <div className="lg:sticky lg:top-[88px] space-y-4 h-fit">
-            <Legend range={range} important={important} />
+            <Legend
+              range={range}
+              important={important}
+              onEditImportant={(d) => setImportantOpen({ editing: d })}
+              onReload={() => reload()}
+            />
             <MemberSummary members={visibleMembers} entries={entries} />
           </div>
         </div>
@@ -210,6 +217,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
       {importantOpen && (
         <ImportantDateDialog
           presetDate={importantOpen.date}
+          editing={importantOpen.editing}
           existing={important}
           onClose={() => setImportantOpen(null)}
           onChanged={() => reload()}

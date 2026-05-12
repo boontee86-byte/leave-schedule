@@ -51,6 +51,13 @@ export const importantCreateSchema = z.object({
   notes: z.string().max(500).optional().nullable(),
 });
 
+export const importantUpdateSchema = z.object({
+  date: isoDate.optional(),
+  label: z.string().trim().min(1).max(100).optional(),
+  color_key: z.string().min(1).max(20).optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
 export const dataQuerySchema = z.object({
   from: isoDate,
   to: isoDate,

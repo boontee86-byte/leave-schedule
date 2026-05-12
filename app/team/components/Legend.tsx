@@ -9,6 +9,8 @@ import type { ImportantDate, Range } from "./types";
 type Props = {
   range: Range;
   important: ImportantDate[];
+  onEditImportant: (d: ImportantDate) => void;
+  onReload: () => void;
 };
 
 type CategoryRow = {
@@ -24,9 +26,10 @@ const CATEGORY_ROWS: CategoryRow[] = [
   { key: "childcare", label: "Family / Childcare", color: LEAVE_META.childcare.color },
 ];
 
-export default function Legend({ range, important }: Props) {
+export default function Legend({ range, important, onEditImportant, onReload }: Props) {
   const [showHolidays, setShowHolidays] = useState(true);
   const [showImportant, setShowImportant] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const holidays = holidaysInRange(range.from, range.to);
 
   const importantInRange = useMemo(() => {
@@ -34,6 +37,16 @@ export default function Legend({ range, important }: Props) {
       .filter((d) => d.date >= range.from && d.date <= range.to)
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [important, range.from, range.to]);
+
+  async function deleteImportant(id: string) {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/important-dates/${id}`, { method: "DELETE" });
+      if (res.ok) onReload();
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -77,15 +90,32 @@ export default function Legend({ range, important }: Props) {
           ) : (
             <ul className="mt-3 space-y-1 text-xs">
               {importantInRange.map((d) => (
-                <li key={d.id} className="flex items-baseline gap-2">
-                  <span
-                    className="inline-block h-2 w-2 rounded-full shrink-0 translate-y-[1px]"
-                    style={{ backgroundColor: importantHex(d.color_key) }}
-                  />
-                  <span className="tabular-nums text-muted shrink-0">
-                    {fullDate(fromISO(d.date))}
-                  </span>
-                  <span className="text-ink/80 truncate">{d.label}</span>
+                <li key={d.id} className="group flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onEditImportant(d)}
+                    className="flex-1 min-w-0 flex items-baseline gap-2 text-left rounded px-1 -mx-1 py-0.5 hover:bg-canvas"
+                    title="Click to edit"
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-full shrink-0 translate-y-[1px]"
+                      style={{ backgroundColor: importantHex(d.color_key) }}
+                    />
+                    <span className="tabular-nums text-muted shrink-0">
+                      {fullDate(fromISO(d.date))}
+                    </span>
+                    <span className="text-ink/80 truncate">{d.label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteImportant(d.id)}
+                    disabled={deletingId === d.id}
+                    title="Delete"
+                    aria-label={`Delete ${d.label}`}
+                    className="shrink-0 text-muted hover:text-ink rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-40 text-sm leading-none"
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ul>
