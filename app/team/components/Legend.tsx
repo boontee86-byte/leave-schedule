@@ -32,11 +32,27 @@ export default function Legend({ range, important, onEditImportant, onReload }: 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const holidays = holidaysInRange(range.from, range.to);
 
-  const importantInRange = useMemo(() => {
-    return important
-      .filter((d) => d.date >= range.from && d.date <= range.to)
-      .sort((a, b) => a.date.localeCompare(b.date));
+  const importantGroups = useMemo(() => {
+    const inRange = important.filter(
+      (d) => d.date >= range.from && d.date <= range.to,
+    );
+    const byColor = new Map<string, ImportantDate[]>();
+    for (const d of inRange) {
+      const arr = byColor.get(d.color_key);
+      if (arr) arr.push(d);
+      else byColor.set(d.color_key, [d]);
+    }
+    return Array.from(byColor.entries()).map(([color_key, items]) => ({
+      color_key,
+      items: items.sort((a, b) => a.date.localeCompare(b.date)),
+      firstDate: items.reduce(
+        (min, d) => (d.date < min ? d.date : min),
+        items[0].date,
+      ),
+    })).sort((a, b) => a.firstDate.localeCompare(b.firstDate));
   }, [important, range.from, range.to]);
+
+  const hasImportant = importantGroups.length > 0;
 
   async function deleteImportant(id: string) {
     setDeletingId(id);
@@ -50,7 +66,7 @@ export default function Legend({ range, important, onEditImportant, onReload }: 
 
   return (
     <div className="space-y-4">
-      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-4 h-fit">
+      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
         <div className="text-xs uppercase tracking-wider text-muted mb-1">Year</div>
         <div className="text-sm mb-4 text-ink/90 tabular-nums">
           {range.from} → {range.to}
@@ -69,7 +85,7 @@ export default function Legend({ range, important, onEditImportant, onReload }: 
         </ul>
       </aside>
 
-      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-4 h-fit">
+      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
         <button
           type="button"
           onClick={() => setShowImportant((s) => !s)}
@@ -85,45 +101,49 @@ export default function Legend({ range, important, onEditImportant, onReload }: 
         </button>
 
         {showImportant && (
-          importantInRange.length === 0 ? (
+          !hasImportant ? (
             <div className="mt-3 text-xs text-muted">No important dates in this range.</div>
           ) : (
-            <ul className="mt-3 space-y-1 text-xs">
-              {importantInRange.map((d) => (
-                <li key={d.id} className="group flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onEditImportant(d)}
-                    className="flex-1 min-w-0 flex items-baseline gap-2 text-left rounded px-1 -mx-1 py-0.5 hover:bg-canvas"
-                    title="Click to edit"
-                  >
-                    <span
-                      className="inline-block h-2 w-2 rounded-full shrink-0 translate-y-[1px]"
-                      style={{ backgroundColor: importantHex(d.color_key) }}
-                    />
-                    <span className="tabular-nums text-muted shrink-0">
-                      {fullDate(fromISO(d.date))}
-                    </span>
-                    <span className="text-ink/80 truncate">{d.label}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteImportant(d.id)}
-                    disabled={deletingId === d.id}
-                    title="Delete"
-                    aria-label={`Delete ${d.label}`}
-                    className="shrink-0 text-muted hover:text-ink rounded px-1.5 py-0.5 opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-40 text-sm leading-none"
-                  >
-                    ×
-                  </button>
-                </li>
+            <div className="mt-3 space-y-3 text-xs">
+              {importantGroups.map((group) => (
+                <ul
+                  key={group.color_key}
+                  className="space-y-0.5 border-l-2 pl-2"
+                  style={{ borderColor: importantHex(group.color_key) }}
+                >
+                  {group.items.map((d) => (
+                    <li key={d.id} className="group flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onEditImportant(d)}
+                        className="flex-1 min-w-0 flex items-baseline gap-2 text-left rounded px-1 -mx-1 py-0.5 hover:bg-canvas"
+                        title="Click to edit"
+                      >
+                        <span className="tabular-nums text-muted shrink-0">
+                          {fullDate(fromISO(d.date))}
+                        </span>
+                        <span className="text-ink/80 truncate">{d.label}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteImportant(d.id)}
+                        disabled={deletingId === d.id}
+                        title="Delete"
+                        aria-label={`Delete ${d.label}`}
+                        className="shrink-0 text-muted hover:text-ink rounded px-1.5 py-0.5 sm:opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-40 text-base leading-none"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               ))}
-            </ul>
+            </div>
           )
         )}
       </aside>
 
-      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-4 h-fit">
+      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
         <button
           type="button"
           onClick={() => setShowHolidays((s) => !s)}
@@ -145,13 +165,9 @@ export default function Legend({ range, important, onEditImportant, onReload }: 
           holidays.length === 0 ? (
             <div className="mt-3 text-xs text-muted">No public holidays in this range.</div>
           ) : (
-            <ul className="mt-3 space-y-1 text-xs">
+            <ul className="mt-3 space-y-0.5 text-xs">
               {holidays.map((h) => (
                 <li key={h.date} className="flex items-baseline gap-2">
-                  <span
-                    className="inline-block h-2 w-2 rounded-full shrink-0 translate-y-[1px]"
-                    style={{ backgroundColor: PUBLIC_HOLIDAY_COLOR }}
-                  />
                   <span className="tabular-nums text-muted shrink-0">
                     {fullDate(fromISO(h.date))}
                   </span>

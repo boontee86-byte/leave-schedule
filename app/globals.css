@@ -4,6 +4,12 @@
 
 :root {
   color-scheme: light;
+  --member-col: 120px;
+}
+@media (max-width: 640px) {
+  :root {
+    --member-col: 84px;
+  }
 }
 
 html,

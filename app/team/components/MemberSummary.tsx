@@ -57,7 +57,7 @@ export default function MemberSummary({ members, entries }: Props) {
   }, [members, entries]);
 
   return (
-    <aside className="rounded-xl2 border border-line bg-white shadow-soft p-4 h-fit">
+    <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
       <div className="flex items-baseline justify-between mb-3">
         <div className="text-xs uppercase tracking-wider text-muted">
           Members ({members.length})

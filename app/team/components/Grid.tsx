@@ -23,7 +23,7 @@ type Props = {
   onDateLabelClick: (date: string) => void;
 };
 
-const MEMBER_COL = 120;
+const MEMBER_COL_VAR = "var(--member-col)";
 const CELL = 22;
 const GAP = 3;
 const EMPTY_BG = "#ebedf0";
@@ -102,13 +102,13 @@ function MonthGrid({
   onEntryClick: (entry: LeaveEntry) => void;
   onDateLabelClick: (date: string) => void;
 }) {
-  const colTemplate = `${MEMBER_COL}px repeat(${days.length}, ${CELL}px)`;
+  const colTemplate = `${MEMBER_COL_VAR} repeat(${days.length}, ${CELL}px)`;
 
   return (
     <section>
       <h3 className="text-sm font-medium text-ink/90 mb-2 px-1">{label}</h3>
 
-      <div className="overflow-x-auto md:overflow-x-visible">
+      <div className="overflow-x-auto">
         <div
           className="inline-block"
           style={{
@@ -213,7 +213,7 @@ function MemberRow({
   return (
     <>
       <div
-        className="sticky left-0 z-10 bg-canvas pr-2 flex items-center text-[13px] text-ink/90 truncate"
+        className="sticky left-0 z-10 bg-canvas pr-2 flex items-center text-[12px] sm:text-[13px] text-ink/90 truncate"
         style={{ height: CELL, boxShadow: STICKY_SHADOW }}
         title={member.name}
       >

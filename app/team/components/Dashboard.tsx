@@ -185,7 +185,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             )}
           </section>
 
-          <div className="lg:sticky lg:top-[88px] space-y-4 h-fit">
+          <div className="lg:sticky lg:top-[88px] space-y-4 h-fit max-w-sm lg:max-w-none">
             <Legend
               range={range}
               important={important}
