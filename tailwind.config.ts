@@ -16,7 +16,7 @@ const config: Config = {
           travel: "#C9DCEA",
           medical: "#EAC4C9",
           childcare: "#D9CFE6",
-          important: "#F5DDA2",
+          important: "#F7E27A",
         },
       },
       fontFamily: {

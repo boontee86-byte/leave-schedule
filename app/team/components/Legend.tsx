@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { LEAVE_META, PUBLIC_HOLIDAY_COLOR } from "@/lib/colors";
+import { useMemo, useState } from "react";
+import { LEAVE_META, PUBLIC_HOLIDAY_COLOR, importantHex } from "@/lib/colors";
 import { fromISO, fullDate } from "@/lib/dates";
 import { holidaysInRange } from "@/lib/holidays";
-import type { Range } from "./types";
+import type { ImportantDate, Range } from "./types";
 
 type Props = {
   range: Range;
+  important: ImportantDate[];
 };
 
 type CategoryRow = {
@@ -23,9 +24,16 @@ const CATEGORY_ROWS: CategoryRow[] = [
   { key: "childcare", label: "Family / Childcare", color: LEAVE_META.childcare.color },
 ];
 
-export default function Legend({ range }: Props) {
+export default function Legend({ range, important }: Props) {
   const [showHolidays, setShowHolidays] = useState(true);
+  const [showImportant, setShowImportant] = useState(true);
   const holidays = holidaysInRange(range.from, range.to);
+
+  const importantInRange = useMemo(() => {
+    return important
+      .filter((d) => d.date >= range.from && d.date <= range.to)
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [important, range.from, range.to]);
 
   return (
     <div className="space-y-4">
@@ -45,11 +53,44 @@ export default function Legend({ range }: Props) {
               <span className="truncate">{row.label}</span>
             </li>
           ))}
-          <li className="flex items-center gap-2 text-sm">
-            <span className="inline-block h-3.5 w-3.5 rounded bg-leave-important" />
-            <span>Important date</span>
-          </li>
         </ul>
+      </aside>
+
+      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-4 h-fit">
+        <button
+          type="button"
+          onClick={() => setShowImportant((s) => !s)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <span className="flex items-center gap-2">
+            <span className="inline-block h-3.5 w-3.5 rounded bg-leave-important" />
+            <span className="text-xs uppercase tracking-wider text-muted">
+              Important dates
+            </span>
+          </span>
+          <span className="text-xs text-muted">{showImportant ? "Hide" : "Show"}</span>
+        </button>
+
+        {showImportant && (
+          importantInRange.length === 0 ? (
+            <div className="mt-3 text-xs text-muted">No important dates in this range.</div>
+          ) : (
+            <ul className="mt-3 space-y-1 text-xs">
+              {importantInRange.map((d) => (
+                <li key={d.id} className="flex items-baseline gap-2">
+                  <span
+                    className="inline-block h-2 w-2 rounded-full shrink-0 translate-y-[1px]"
+                    style={{ backgroundColor: importantHex(d.color_key) }}
+                  />
+                  <span className="tabular-nums text-muted shrink-0">
+                    {fullDate(fromISO(d.date))}
+                  </span>
+                  <span className="text-ink/80 truncate">{d.label}</span>
+                </li>
+              ))}
+            </ul>
+          )
+        )}
       </aside>
 
       <aside className="rounded-xl2 border border-line bg-white shadow-soft p-4 h-fit">

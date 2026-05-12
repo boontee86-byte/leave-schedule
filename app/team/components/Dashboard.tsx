@@ -183,7 +183,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
           </section>
 
           <div className="lg:sticky lg:top-[88px] space-y-4 h-fit">
-            <Legend range={range} />
+            <Legend range={range} important={important} />
             <MemberSummary members={visibleMembers} entries={entries} />
           </div>
         </div>

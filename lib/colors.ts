@@ -84,10 +84,10 @@ export const PUBLIC_HOLIDAY_COLOR = "#F2C79A";
 export const WEEKEND_COLOR = "#c8ccd1";
 
 export const IMPORTANT_COLORS = [
-  { key: "amber",  hex: "#F5DDA2" },
-  { key: "rose",   hex: "#EAC4C9" },
-  { key: "sage",   hex: "#C8DCC2" },
-  { key: "sky",    hex: "#C9DCEA" },
+  { key: "lemon", hex: "#F7E27A" },
+  { key: "teal",  hex: "#A8DBD0" },
+  { key: "sky",   hex: "#B5CDE6" },
+  { key: "denim", hex: "#8FAACB" },
 ] as const;
 
 export type ImportantColorKey = (typeof IMPORTANT_COLORS)[number]["key"];
