@@ -227,7 +227,7 @@ export default function Legend({
                         className="flex-1 min-w-0 flex items-baseline gap-2 text-left rounded px-1 -mx-1 py-0.5 hover:bg-canvas"
                         title="Click to edit"
                       >
-                        <span className="tabular-nums text-muted shrink-0">
+                        <span className="font-mono tabular-nums text-muted shrink-0">
                           {fullDate(fromISO(d.date))}
                         </span>
                         <span className="text-ink/80 truncate">{d.label}</span>
@@ -276,7 +276,7 @@ export default function Legend({
             <ul className="mt-3 space-y-0.5 text-xs">
               {holidays.map((h) => (
                 <li key={h.date} className="flex items-baseline gap-2">
-                  <span className="tabular-nums text-muted shrink-0">
+                  <span className="font-mono tabular-nums text-muted shrink-0">
                     {fullDate(fromISO(h.date))}
                   </span>
                   <span className="text-ink/80 truncate">{h.label}</span>

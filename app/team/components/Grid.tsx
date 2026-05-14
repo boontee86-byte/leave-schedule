@@ -162,6 +162,7 @@ export default function Grid({
   }, []);
 
   const interactive = paintMode !== null;
+  const todayISO = useMemo(() => toISO(new Date()), []);
 
   return (
     <div className="flex flex-col gap-7 min-w-0">
@@ -176,6 +177,7 @@ export default function Grid({
           paintMode={paintMode}
           preview={preview}
           interactive={interactive}
+          todayISO={todayISO}
           onCellPointerDown={handleCellPointerDown}
           onCellPointerEnter={handleCellPointerEnter}
           onDateLabelClick={onDateLabelClick}
@@ -194,6 +196,7 @@ function MonthGrid({
   paintMode,
   preview,
   interactive,
+  todayISO,
   onCellPointerDown,
   onCellPointerEnter,
   onDateLabelClick,
@@ -206,6 +209,7 @@ function MonthGrid({
   paintMode: PaintMode;
   preview: PreviewState | null;
   interactive: boolean;
+  todayISO: string;
   onCellPointerDown: (memberId: string, iso: string, e: React.PointerEvent) => void;
   onCellPointerEnter: (memberId: string, iso: string) => void;
   onDateLabelClick: (date: string) => void;
@@ -251,14 +255,20 @@ function MonthGrid({
             const imp = byDate.get(iso);
             const accent = imp?.[0];
             const ph = holidayFor(iso);
+            const isToday = iso === todayISO;
             const labels: string[] = [];
+            if (isToday) labels.push("Today");
             if (ph) labels.push(`Public holiday — ${ph.label}`);
             if (imp && imp.length > 0) {
               for (const i of imp) labels.push(`${i.label}${i.notes ? ` — ${i.notes}` : ""}`);
             }
             const tooltip = labels.length > 0 ? labels.join("\n") : "Click to mark as important";
-            const showAccent = accent || ph;
-            const accentBg = accent ? importantHex(accent.color_key) : PUBLIC_HOLIDAY_COLOR;
+            const showAccent = isToday || accent || ph;
+            const accentBg = isToday
+              ? undefined
+              : accent
+                ? importantHex(accent.color_key)
+                : PUBLIC_HOLIDAY_COLOR;
             return (
               <button
                 key={`day-${iso}`}
@@ -272,7 +282,9 @@ function MonthGrid({
               >
                 {showAccent ? (
                   <span
-                    className="inline-flex items-center justify-center rounded-full font-semibold text-ink"
+                    className={`inline-flex items-center justify-center rounded-full font-semibold ${
+                      isToday ? "bg-ink text-white" : "text-ink"
+                    }`}
                     style={{
                       backgroundColor: accentBg,
                       width: 18,
