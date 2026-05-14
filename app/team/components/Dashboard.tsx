@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { addYears, startOfYear, endOfYear } from "date-fns";
-import { fromISO, toISO } from "@/lib/dates";
+import { expandRange, fromISO, isWeekend, toISO } from "@/lib/dates";
 import { LEAVE_META } from "@/lib/colors";
+import { isPublicHoliday } from "@/lib/holidays";
 import type { LeaveEntry, Member, ImportantDate, Range, TeamData } from "./types";
 import Grid from "./Grid";
-import Legend from "./Legend";
+import Legend, { type PaintMode } from "./Legend";
 import MemberSummary from "./MemberSummary";
-import LeaveModal from "./LeaveModal";
 import MemberDialog from "./MemberDialog";
 import ImportantDateDialog from "./ImportantDateDialog";
 import YearPicker from "./YearPicker";
@@ -20,16 +20,12 @@ type Props = {
   initialRange: Range;
 };
 
-export type LeaveModalState =
-  | { mode: "create"; member_id?: string; date?: string }
-  | { mode: "edit"; entry: LeaveEntry };
-
 export default function Dashboard({ initialTeam, initialRange }: Props) {
   const router = useRouter();
   const [range, setRange] = useState<Range>(initialRange);
   const [data, setData] = useState<TeamData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [leaveModal, setLeaveModal] = useState<LeaveModalState | null>(null);
+  const [paintMode, setPaintMode] = useState<PaintMode>(null);
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
   const [importantOpen, setImportantOpen] = useState<
     { date?: string; editing?: ImportantDate } | null
@@ -59,6 +55,27 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
   useEffect(() => {
     reload(range);
   }, [range, reload]);
+
+  // Exit paint mode on Escape or click outside the legend & grid.
+  useEffect(() => {
+    if (!paintMode) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPaintMode(null);
+    }
+    function onPointerDown(e: PointerEvent) {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+      if (t.closest("[data-legend-root]")) return;
+      if (t.closest("[data-paint-cell]")) return;
+      setPaintMode(null);
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [paintMode]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -91,8 +108,65 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
     return members.filter((m) => set.has(m.id));
   }, [members, memberFilter]);
 
+  const onPaint = useCallback(
+    (memberId: string, from: string, to: string, mode: NonNullable<PaintMode>) => {
+      // 1. Optimistic local update.
+      setData((d) => {
+        if (!d) return d;
+        const stripped = d.leave_entries.filter(
+          (e) => !(e.member_id === memberId && e.date >= from && e.date <= to),
+        );
+        if (mode.kind === "erase") {
+          return { ...d, leave_entries: stripped };
+        }
+        const synthesized: LeaveEntry[] = [];
+        for (const day of expandRange(from, to)) {
+          if (isWeekend(day)) continue;
+          const iso = toISO(day);
+          if (isPublicHoliday(iso)) continue;
+          synthesized.push({
+            id: `temp:${memberId}:${iso}:${Math.random().toString(36).slice(2, 8)}`,
+            member_id: memberId,
+            date: iso,
+            leave_type: mode.leave_type,
+            notes: null,
+          });
+        }
+        return { ...d, leave_entries: [...stripped, ...synthesized] };
+      });
+
+      // 2. Fire network call and reconcile.
+      void (async () => {
+        try {
+          if (mode.kind === "paint") {
+            await fetch("/api/leave", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                member_id: memberId,
+                from,
+                to,
+                leave_type: mode.leave_type,
+              }),
+            });
+          } else {
+            const qs = new URLSearchParams({ member_id: memberId, from, to });
+            await fetch(`/api/leave?${qs.toString()}`, { method: "DELETE" });
+          }
+        } finally {
+          reload();
+        }
+      })();
+    },
+    [reload],
+  );
+
   return (
-    <div className="min-h-screen bg-canvas text-ink">
+    <div
+      className={`min-h-screen bg-canvas text-ink ${
+        paintMode ? "cursor-crosshair" : ""
+      }`}
+    >
       <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur px-4 sm:px-6 py-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex items-center justify-between gap-3 sm:justify-start">
@@ -123,12 +197,6 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
               onReload={() => reload()}
             />
             <button
-              onClick={() => setLeaveModal({ mode: "create" })}
-              className="rounded-full bg-ink text-white text-sm px-4 py-2 hover:opacity-90"
-            >
-              Log leave
-            </button>
-            <button
               onClick={() => setImportantOpen({})}
               className="rounded-full border border-line bg-white text-sm px-4 py-2 hover:bg-canvas"
             >
@@ -152,7 +220,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
       </header>
 
       <main className="px-4 sm:px-6 py-5">
-        <div className="grid lg:grid-cols-[1fr_240px] gap-5">
+        <div className="grid lg:grid-cols-[1fr_280px] gap-5">
           <section className="min-w-0">
             {loading && !data ? (
               <div className="rounded-xl2 border border-line bg-white shadow-soft p-10 text-center text-muted text-sm">
@@ -176,10 +244,8 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
                 members={visibleMembers}
                 entries={entries}
                 important={important}
-                onCellClick={(member_id, date) =>
-                  setLeaveModal({ mode: "create", member_id, date })
-                }
-                onEntryClick={(entry) => setLeaveModal({ mode: "edit", entry })}
+                paintMode={paintMode}
+                onPaint={onPaint}
                 onDateLabelClick={(date) => setImportantOpen({ date })}
               />
             )}
@@ -189,6 +255,8 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             <Legend
               range={range}
               important={important}
+              paintMode={paintMode}
+              onSetPaintMode={setPaintMode}
               onEditImportant={(d) => setImportantOpen({ editing: d })}
               onReload={() => reload()}
             />
@@ -197,17 +265,6 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
         </div>
       </main>
 
-      {leaveModal && (
-        <LeaveModal
-          state={leaveModal}
-          members={members}
-          onClose={() => setLeaveModal(null)}
-          onSaved={() => {
-            setLeaveModal(null);
-            reload();
-          }}
-        />
-      )}
       {memberDialogOpen && (
         <MemberDialog
           members={members}

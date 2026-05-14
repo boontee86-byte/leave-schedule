@@ -36,13 +36,22 @@ export async function POST(req: Request) {
         notes: notes ?? null,
       }));
 
+    const del = await db
+      .from("leave_entries")
+      .delete()
+      .eq("team_id", team_id)
+      .eq("member_id", member_id)
+      .gte("date", from)
+      .lte("date", to);
+    if (del.error) throw del.error;
+
     if (rows.length === 0) {
       return NextResponse.json({ ok: true, entries: [] });
     }
 
     const { data, error } = await db
       .from("leave_entries")
-      .upsert(rows, { onConflict: "member_id,date,leave_type" })
+      .insert(rows)
       .select("id, member_id, date, leave_type, notes");
     if (error) throw error;
 

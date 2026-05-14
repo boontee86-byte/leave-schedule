@@ -1,32 +1,68 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { LEAVE_META, PUBLIC_HOLIDAY_COLOR, importantHex } from "@/lib/colors";
+import {
+  AM_TYPES,
+  LEAVE_META,
+  PM_TYPES,
+  PUBLIC_HOLIDAY_COLOR,
+  importantHex,
+  type LeaveType,
+} from "@/lib/colors";
 import { fromISO, fullDate } from "@/lib/dates";
 import { holidaysInRange } from "@/lib/holidays";
 import type { ImportantDate, Range } from "./types";
 
+export type PaintMode =
+  | { kind: "paint"; leave_type: LeaveType }
+  | { kind: "erase" }
+  | null;
+
 type Props = {
   range: Range;
   important: ImportantDate[];
+  paintMode: PaintMode;
+  onSetPaintMode: (m: PaintMode) => void;
   onEditImportant: (d: ImportantDate) => void;
   onReload: () => void;
 };
 
-type CategoryRow = {
+type CategoryGroup = {
   key: string;
   label: string;
-  color: string;
+  full: LeaveType;
+  am?: LeaveType;
+  pm?: LeaveType;
 };
 
-const CATEGORY_ROWS: CategoryRow[] = [
-  { key: "annual",    label: "Annual leave",      color: LEAVE_META.full_day.color },
-  { key: "block",     label: "Mandatory leave",   color: LEAVE_META.full_day_block.color },
-  { key: "medical",   label: "Medical leave",     color: LEAVE_META.medical.color },
-  { key: "childcare", label: "Family / Childcare", color: LEAVE_META.childcare.color },
+const CHIP_GROUPS: CategoryGroup[] = [
+  { key: "annual",    label: "Annual",    full: "full_day",       am: "half_day_am",  pm: "half_day_pm" },
+  { key: "medical",   label: "Medical",   full: "medical",        am: "medical_am",   pm: "medical_pm" },
+  { key: "childcare", label: "Family/Childcare", full: "childcare",      am: "childcare_am", pm: "childcare_pm" },
+  { key: "block",     label: "Mandatory", full: "full_day_block" },
 ];
 
-export default function Legend({ range, important, onEditImportant, onReload }: Props) {
+const EMPTY_BG = "#ebedf0";
+
+function chipFillStyle(type: LeaveType): React.CSSProperties {
+  const color = LEAVE_META[type].color;
+  if (AM_TYPES.has(type)) {
+    return { background: `linear-gradient(to right, ${color} 50%, ${EMPTY_BG} 50%)` };
+  }
+  if (PM_TYPES.has(type)) {
+    return { background: `linear-gradient(to right, ${EMPTY_BG} 50%, ${color} 50%)` };
+  }
+  return { backgroundColor: color };
+}
+
+export default function Legend({
+  range,
+  important,
+  paintMode,
+  onSetPaintMode,
+  onEditImportant,
+  onReload,
+}: Props) {
   const [showHolidays, setShowHolidays] = useState(true);
   const [showImportant, setShowImportant] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -64,24 +100,96 @@ export default function Legend({ range, important, onEditImportant, onReload }: 
     }
   }
 
+  function toggleChip(type: LeaveType) {
+    if (paintMode?.kind === "paint" && paintMode.leave_type === type) {
+      onSetPaintMode(null);
+    } else {
+      onSetPaintMode({ kind: "paint", leave_type: type });
+    }
+  }
+
+  function toggleEraser() {
+    if (paintMode?.kind === "erase") onSetPaintMode(null);
+    else onSetPaintMode({ kind: "erase" });
+  }
+
+  const isActive = (type: LeaveType) =>
+    paintMode?.kind === "paint" && paintMode.leave_type === type;
+  const isEraserActive = paintMode?.kind === "erase";
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-legend-root>
       <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
         <div className="text-xs uppercase tracking-wider text-muted mb-1">Year</div>
-        <div className="text-sm mb-4 text-ink/90 tabular-nums">
+        <div className="text-sm mb-3 text-ink/90 tabular-nums">
           {range.from} → {range.to}
         </div>
-        <div className="text-xs uppercase tracking-wider text-muted mb-2">Legend</div>
+
+        <div className="text-xs uppercase tracking-wider text-muted mb-1">Paint leave</div>
+        <div className="text-[11px] text-muted mb-2 leading-snug">
+          Click a chip, then click or drag on the calendar. Shift-click for ranges. Esc or click outside to exit.
+        </div>
+
         <ul className="space-y-1.5">
-          {CATEGORY_ROWS.map((row) => (
-            <li key={row.key} className="flex items-center gap-2 text-sm">
-              <span
-                className="inline-block h-3.5 w-3.5 rounded shrink-0"
-                style={{ backgroundColor: row.color }}
-              />
-              <span className="truncate">{row.label}</span>
+          {CHIP_GROUPS.map((g) => (
+            <li key={g.key} className="flex items-center gap-2 text-[12px]">
+              <span className="flex-1 min-w-0 text-ink/85 whitespace-nowrap">{g.label}</span>
+              <div
+                className="grid shrink-0"
+                style={{ gridTemplateColumns: "repeat(3, 34px)", gap: 4 }}
+              >
+                <ChipButton
+                  type={g.full}
+                  label="Full"
+                  active={isActive(g.full)}
+                  onClick={() => toggleChip(g.full)}
+                />
+                {g.am ? (
+                  <ChipButton
+                    type={g.am}
+                    label="AM"
+                    active={isActive(g.am)}
+                    onClick={() => toggleChip(g.am!)}
+                  />
+                ) : (
+                  <span aria-hidden />
+                )}
+                {g.pm ? (
+                  <ChipButton
+                    type={g.pm}
+                    label="PM"
+                    active={isActive(g.pm)}
+                    onClick={() => toggleChip(g.pm!)}
+                  />
+                ) : (
+                  <span aria-hidden />
+                )}
+              </div>
             </li>
           ))}
+          <li className="flex items-center gap-2 text-[12px] pt-1">
+            <span className="flex-1 min-w-0 text-ink/85 whitespace-nowrap">Eraser</span>
+            <div
+              className="grid shrink-0"
+              style={{ gridTemplateColumns: "repeat(3, 34px)", gap: 4 }}
+            >
+              <button
+                type="button"
+                onClick={toggleEraser}
+                title="Erase leave on click/drag"
+                aria-pressed={isEraserActive}
+                className={`inline-flex items-center justify-center h-[22px] w-full min-w-[34px] rounded border text-[13px] leading-none transition ${
+                  isEraserActive
+                    ? "ring-2 ring-ink/60 ring-offset-1 border-ink/40 bg-canvas"
+                    : "border-line bg-white hover:bg-canvas"
+                }`}
+              >
+                <span aria-hidden>🧽</span>
+              </button>
+              <span aria-hidden />
+              <span aria-hidden />
+            </div>
+          </li>
         </ul>
       </aside>
 
@@ -179,5 +287,36 @@ export default function Legend({ range, important, onEditImportant, onReload }: 
         )}
       </aside>
     </div>
+  );
+}
+
+function ChipButton({
+  type,
+  label,
+  active,
+  onClick,
+}: {
+  type: LeaveType;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const fill = chipFillStyle(type);
+  const meta = LEAVE_META[type];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      title={meta.label}
+      className={`inline-flex items-center justify-center h-[22px] min-w-[34px] px-1 rounded border text-[10px] font-medium leading-none transition ${
+        active
+          ? "ring-2 ring-ink/60 ring-offset-1 border-ink/40"
+          : "border-line hover:ring-1 hover:ring-ink/20"
+      }`}
+      style={fill}
+    >
+      <span className="text-ink/80 mix-blend-multiply">{label}</span>
+    </button>
   );
 }

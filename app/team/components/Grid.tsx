@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { expandRange, groupDatesByMonth, isWeekend, toISO } from "@/lib/dates";
 import {
   AM_TYPES,
@@ -11,6 +11,7 @@ import {
   importantHex,
 } from "@/lib/colors";
 import { holidayFor } from "@/lib/holidays";
+import type { PaintMode } from "./Legend";
 import type { LeaveEntry, ImportantDate, Member, Range } from "./types";
 
 type Props = {
@@ -18,9 +19,15 @@ type Props = {
   members: Member[];
   entries: LeaveEntry[];
   important: ImportantDate[];
-  onCellClick: (member_id: string, date: string) => void;
-  onEntryClick: (entry: LeaveEntry) => void;
+  paintMode: PaintMode;
+  onPaint: (memberId: string, fromISO: string, toISO: string, mode: NonNullable<PaintMode>) => void;
   onDateLabelClick: (date: string) => void;
+};
+
+type PreviewState = {
+  memberId: string;
+  from: string;
+  to: string;
 };
 
 const MEMBER_COL_VAR = "var(--member-col)";
@@ -34,8 +41,8 @@ export default function Grid({
   members,
   entries,
   important,
-  onCellClick,
-  onEntryClick,
+  paintMode,
+  onPaint,
   onDateLabelClick,
 }: Props) {
   const months = useMemo(
@@ -64,6 +71,98 @@ export default function Grid({
     return m;
   }, [important]);
 
+  const dragRef = useRef<{ memberId: string; startISO: string; currentISO: string } | null>(null);
+  const lastClickRef = useRef<{ memberId: string; iso: string } | null>(null);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const paintModeRef = useRef(paintMode);
+  useEffect(() => {
+    paintModeRef.current = paintMode;
+  }, [paintMode]);
+
+  const commitDrag = useCallback(() => {
+    const drag = dragRef.current;
+    const mode = paintModeRef.current;
+    dragRef.current = null;
+    setPreview(null);
+    if (!drag || !mode) return;
+    const from = drag.startISO < drag.currentISO ? drag.startISO : drag.currentISO;
+    const to = drag.startISO < drag.currentISO ? drag.currentISO : drag.startISO;
+    onPaint(drag.memberId, from, to, mode);
+    lastClickRef.current = { memberId: drag.memberId, iso: drag.currentISO };
+  }, [onPaint]);
+
+  useEffect(() => {
+    function onPointerUp() {
+      if (dragRef.current) commitDrag();
+    }
+    function onPointerCancel() {
+      dragRef.current = null;
+      setPreview(null);
+    }
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    return () => {
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+    };
+  }, [commitDrag]);
+
+  // Cancel any in-flight drag if paint mode is cleared (e.g., user pressed Esc).
+  useEffect(() => {
+    if (paintMode === null && dragRef.current) {
+      dragRef.current = null;
+      setPreview(null);
+    }
+  }, [paintMode]);
+
+  const handleCellPointerDown = useCallback(
+    (memberId: string, iso: string, e: React.PointerEvent) => {
+      const mode = paintModeRef.current;
+      if (!mode) return;
+      // Suppress browser native drag/selection so paint feels native.
+      e.preventDefault();
+
+      // Touch / pen / anything not mouse — paint the tapped cell only, no drag.
+      if (e.pointerType !== "mouse") {
+        onPaint(memberId, iso, iso, mode);
+        lastClickRef.current = { memberId, iso };
+        return;
+      }
+
+      // Shift+click range from last click on the same row.
+      if (e.shiftKey && lastClickRef.current?.memberId === memberId) {
+        const anchor = lastClickRef.current.iso;
+        const from = anchor < iso ? anchor : iso;
+        const to = anchor < iso ? iso : anchor;
+        onPaint(memberId, from, to, mode);
+        lastClickRef.current = { memberId, iso };
+        return;
+      }
+
+      // Start drag.
+      dragRef.current = { memberId, startISO: iso, currentISO: iso };
+      setPreview({ memberId, from: iso, to: iso });
+      try {
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      } catch {
+        // setPointerCapture can throw if the element is already released — ignore.
+      }
+    },
+    [onPaint],
+  );
+
+  const handleCellPointerEnter = useCallback((memberId: string, iso: string) => {
+    const drag = dragRef.current;
+    if (!drag || drag.memberId !== memberId) return;
+    if (drag.currentISO === iso) return;
+    drag.currentISO = iso;
+    const from = drag.startISO < iso ? drag.startISO : iso;
+    const to = drag.startISO < iso ? iso : drag.startISO;
+    setPreview({ memberId, from, to });
+  }, []);
+
+  const interactive = paintMode !== null;
+
   return (
     <div className="flex flex-col gap-7 min-w-0">
       {months.map((m) => (
@@ -74,8 +173,11 @@ export default function Grid({
           members={members}
           byCell={byCell}
           byDate={byDate}
-          onCellClick={onCellClick}
-          onEntryClick={onEntryClick}
+          paintMode={paintMode}
+          preview={preview}
+          interactive={interactive}
+          onCellPointerDown={handleCellPointerDown}
+          onCellPointerEnter={handleCellPointerEnter}
           onDateLabelClick={onDateLabelClick}
         />
       ))}
@@ -89,8 +191,11 @@ function MonthGrid({
   members,
   byCell,
   byDate,
-  onCellClick,
-  onEntryClick,
+  paintMode,
+  preview,
+  interactive,
+  onCellPointerDown,
+  onCellPointerEnter,
   onDateLabelClick,
 }: {
   label: string;
@@ -98,8 +203,11 @@ function MonthGrid({
   members: Member[];
   byCell: Map<string, LeaveEntry[]>;
   byDate: Map<string, ImportantDate[]>;
-  onCellClick: (member_id: string, date: string) => void;
-  onEntryClick: (entry: LeaveEntry) => void;
+  paintMode: PaintMode;
+  preview: PreviewState | null;
+  interactive: boolean;
+  onCellPointerDown: (memberId: string, iso: string, e: React.PointerEvent) => void;
+  onCellPointerEnter: (memberId: string, iso: string) => void;
   onDateLabelClick: (date: string) => void;
 }) {
   const colTemplate = `${MEMBER_COL_VAR} repeat(${days.length}, ${CELL}px)`;
@@ -187,8 +295,11 @@ function MonthGrid({
               member={m}
               days={days}
               byCell={byCell}
-              onCellClick={onCellClick}
-              onEntryClick={onEntryClick}
+              paintMode={paintMode}
+              preview={preview?.memberId === m.id ? preview : null}
+              interactive={interactive}
+              onCellPointerDown={onCellPointerDown}
+              onCellPointerEnter={onCellPointerEnter}
             />
           ))}
         </div>
@@ -201,14 +312,20 @@ function MemberRow({
   member,
   days,
   byCell,
-  onCellClick,
-  onEntryClick,
+  paintMode,
+  preview,
+  interactive,
+  onCellPointerDown,
+  onCellPointerEnter,
 }: {
   member: Member;
   days: Date[];
   byCell: Map<string, LeaveEntry[]>;
-  onCellClick: (member_id: string, date: string) => void;
-  onEntryClick: (entry: LeaveEntry) => void;
+  paintMode: PaintMode;
+  preview: PreviewState | null;
+  interactive: boolean;
+  onCellPointerDown: (memberId: string, iso: string, e: React.PointerEvent) => void;
+  onCellPointerEnter: (memberId: string, iso: string) => void;
 }) {
   return (
     <>
@@ -223,15 +340,21 @@ function MemberRow({
         const iso = toISO(d);
         const cellEntries = byCell.get(`${member.id}|${iso}`) ?? [];
         const ph = holidayFor(iso);
+        const inPreview =
+          !!preview && iso >= preview.from && iso <= preview.to;
         return (
           <DayCell
             key={member.id + iso}
+            memberId={member.id}
             iso={iso}
             weekend={isWeekend(d)}
             holidayLabel={ph?.label}
             entries={cellEntries}
-            onEmptyClick={() => onCellClick(member.id, iso)}
-            onEntryClick={onEntryClick}
+            paintMode={paintMode}
+            inPreview={inPreview}
+            interactive={interactive}
+            onCellPointerDown={onCellPointerDown}
+            onCellPointerEnter={onCellPointerEnter}
           />
         );
       })}
@@ -239,20 +362,28 @@ function MemberRow({
   );
 }
 
-function DayCell({
+const DayCell = memo(function DayCell({
+  memberId,
   iso,
   weekend,
   holidayLabel,
   entries,
-  onEmptyClick,
-  onEntryClick,
+  paintMode,
+  inPreview,
+  interactive,
+  onCellPointerDown,
+  onCellPointerEnter,
 }: {
+  memberId: string;
   iso: string;
   weekend: boolean;
   holidayLabel?: string;
   entries: LeaveEntry[];
-  onEmptyClick: () => void;
-  onEntryClick: (entry: LeaveEntry) => void;
+  paintMode: PaintMode;
+  inPreview: boolean;
+  interactive: boolean;
+  onCellPointerDown: (memberId: string, iso: string, e: React.PointerEvent) => void;
+  onCellPointerEnter: (memberId: string, iso: string) => void;
 }) {
   const baseStyle: React.CSSProperties = {
     width: CELL,
@@ -263,6 +394,7 @@ function DayCell({
   if (weekend) {
     return (
       <div
+        data-paint-cell=""
         style={{ ...baseStyle, backgroundColor: WEEKEND_COLOR }}
         title="Weekend"
         aria-label="Weekend"
@@ -273,6 +405,7 @@ function DayCell({
   if (holidayLabel) {
     return (
       <div
+        data-paint-cell=""
         style={{ ...baseStyle, backgroundColor: PUBLIC_HOLIDAY_COLOR }}
         title={`Public holiday — ${holidayLabel}`}
         aria-label={`Public holiday — ${holidayLabel}`}
@@ -280,34 +413,64 @@ function DayCell({
     );
   }
 
-  if (entries.length === 0) {
-    return (
-      <button
-        type="button"
-        onClick={onEmptyClick}
-        className="hover:ring-2 hover:ring-ink/20 transition"
-        style={{ ...baseStyle, backgroundColor: EMPTY_BG }}
-        aria-label={`Log leave on ${iso}`}
-      />
-    );
-  }
+  const empty = entries.length === 0;
+  const fill = empty
+    ? { backgroundColor: EMPTY_BG }
+    : renderFill(entries, EMPTY_BG);
 
-  const tooltip = entries
-    .map((e) => {
-      const meta = LEAVE_META[e.leave_type];
-      return `${meta.label}${e.notes ? ` — ${e.notes}` : ""}`;
-    })
-    .join(" · ");
+  const tooltip = empty
+    ? undefined
+    : entries
+        .map((e) => {
+          const meta = LEAVE_META[e.leave_type];
+          return `${meta.label}${e.notes ? ` — ${e.notes}` : ""}`;
+        })
+        .join(" · ");
+
+  const previewOverlay = inPreview ? previewStyleFor(paintMode) : null;
 
   return (
-    <button
-      type="button"
-      onClick={() => onEntryClick(entries[0])}
+    <div
+      data-paint-cell=""
+      onPointerDown={
+        interactive
+          ? (e) => onCellPointerDown(memberId, iso, e)
+          : undefined
+      }
+      onPointerEnter={
+        interactive ? () => onCellPointerEnter(memberId, iso) : undefined
+      }
       title={tooltip}
-      className="hover:ring-2 hover:ring-ink/30 transition"
-      style={{ ...baseStyle, ...renderFill(entries, EMPTY_BG) }}
+      aria-label={empty ? `Empty day ${iso}` : tooltip}
+      style={{
+        ...baseStyle,
+        ...fill,
+        ...(previewOverlay ?? {}),
+        cursor: interactive ? "crosshair" : "default",
+        touchAction: interactive ? "none" : undefined,
+      }}
+      className={
+        interactive
+          ? "hover:ring-2 hover:ring-ink/30 transition"
+          : ""
+      }
     />
   );
+});
+
+function previewStyleFor(mode: PaintMode): React.CSSProperties {
+  if (!mode) return {};
+  if (mode.kind === "erase") {
+    return {
+      boxShadow: "inset 0 0 0 2px rgba(220,60,60,0.85)",
+      backgroundImage:
+        "repeating-linear-gradient(45deg, rgba(220,60,60,0.25) 0 3px, transparent 3px 6px)",
+    };
+  }
+  const color = LEAVE_META[mode.leave_type].color;
+  return {
+    boxShadow: `inset 0 0 0 2px ${color}`,
+  };
 }
 
 function renderFill(entries: LeaveEntry[], emptyBg: string): React.CSSProperties {
