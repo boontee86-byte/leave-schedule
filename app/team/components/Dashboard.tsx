@@ -135,25 +135,33 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
         return { ...d, leave_entries: [...stripped, ...synthesized] };
       });
 
-      // 2. Fire network call and reconcile.
+      // 2. Fire network call. Only reload on error — the optimistic state is
+      //    already correct on success, so skipping the refetch removes the
+      //    post-paint "settling" tail.
       void (async () => {
         try {
-          if (mode.kind === "paint") {
-            await fetch("/api/leave", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                member_id: memberId,
-                from,
-                to,
-                leave_type: mode.leave_type,
-              }),
-            });
-          } else {
-            const qs = new URLSearchParams({ member_id: memberId, from, to });
-            await fetch(`/api/leave?${qs.toString()}`, { method: "DELETE" });
-          }
-        } finally {
+          const res =
+            mode.kind === "paint"
+              ? await fetch("/api/leave", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({
+                    member_id: memberId,
+                    from,
+                    to,
+                    leave_type: mode.leave_type,
+                  }),
+                })
+              : await fetch(
+                  `/api/leave?${new URLSearchParams({
+                    member_id: memberId,
+                    from,
+                    to,
+                  }).toString()}`,
+                  { method: "DELETE" },
+                );
+          if (!res.ok) reload();
+        } catch {
           reload();
         }
       })();
