@@ -3,27 +3,40 @@
 import { useMemo } from "react";
 import { fromISO, isWeekend } from "@/lib/dates";
 import { isPublicHoliday } from "@/lib/holidays";
-import type { LeaveEntry, Member } from "./types";
+import {
+  CATEGORIES,
+  CATEGORY_LABEL,
+  available,
+  carryForward,
+  emptyBalance,
+  entitlement,
+  hasExtras,
+  inLieu,
+  type Category,
+} from "@/lib/balance";
+import type { LeaveEntry, Member, MemberBalance } from "./types";
 
 type Props = {
   members: Member[];
   entries: LeaveEntry[];
+  balances: MemberBalance[];
+  year: number;
 };
 
-type Buckets = { annual: number; family: number; medical: number };
+type Taken = Record<Category, number>;
 
-function emptyBuckets(): Buckets {
-  return { annual: 0, family: 0, medical: 0 };
+function emptyTaken(): Taken {
+  return { annual: 0, childcare: 0, medical: 0 };
 }
 
 function fmt(n: number): string {
-  return n % 1 === 0 ? `${n}` : n.toFixed(1);
+  return n.toFixed(1);
 }
 
-export default function MemberSummary({ members, entries }: Props) {
-  const totals = useMemo(() => {
-    const map = new Map<string, Buckets>();
-    for (const m of members) map.set(m.id, emptyBuckets());
+export default function MemberSummary({ members, entries, balances, year }: Props) {
+  const taken = useMemo(() => {
+    const map = new Map<string, Taken>();
+    for (const m of members) map.set(m.id, emptyTaken());
     for (const e of entries) {
       const b = map.get(e.member_id);
       if (!b) continue;
@@ -38,11 +51,11 @@ export default function MemberSummary({ members, entries }: Props) {
           b.annual += 0.5;
           break;
         case "childcare":
-          b.family += 1;
+          b.childcare += 1;
           break;
         case "childcare_am":
         case "childcare_pm":
-          b.family += 0.5;
+          b.childcare += 0.5;
           break;
         case "medical":
           b.medical += 1;
@@ -56,47 +69,70 @@ export default function MemberSummary({ members, entries }: Props) {
     return map;
   }, [members, entries]);
 
+  const balanceMap = useMemo(() => {
+    const map = new Map<string, MemberBalance>();
+    for (const m of members) map.set(m.id, emptyBalance(m.id, year));
+    for (const b of balances) map.set(b.member_id, b);
+    return map;
+  }, [members, balances, year]);
+
   return (
     <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
       <div className="flex items-baseline justify-between mb-3">
         <div className="text-xs uppercase tracking-wider text-muted">
           Members ({members.length})
         </div>
-        <div className="text-[10px] text-muted">days / year</div>
+        <div className="text-[10px] text-muted tabular-nums">{year}</div>
       </div>
       {members.length === 0 ? (
         <div className="text-sm text-muted">No members yet.</div>
       ) : (
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-1.5 text-sm items-center">
-          <div className="text-[10px] uppercase tracking-wider text-muted" />
-          <div
-            className="text-[10px] uppercase tracking-wider text-muted text-right"
-            title="Annual: Full day + Block + 0.5 × Half day"
-          >
-            AL
-          </div>
-          <div
-            className="text-[10px] uppercase tracking-wider text-muted text-right"
-            title="Family / Childcare leave"
-          >
-            F/C
-          </div>
-          <div
-            className="text-[10px] uppercase tracking-wider text-muted text-right"
-            title="Medical leave"
-          >
-            Med
-          </div>
-          {members.map((m) => {
-            const b = totals.get(m.id) ?? emptyBuckets();
+        <div className="space-y-4">
+          {CATEGORIES.map((cat, idx) => {
+            const extras = hasExtras(cat);
+            const colCount = extras ? 4 : 2;
             return (
-              <FragmentRow
-                key={m.id}
-                name={m.name}
-                annual={b.annual}
-                family={b.family}
-                medical={b.medical}
-              />
+              <section key={cat} className={idx > 0 ? "pt-3 border-t border-line" : ""}>
+                <h3 className="text-xs font-medium text-ink/90 mb-1.5">
+                  {CATEGORY_LABEL[cat]}
+                </h3>
+                <div
+                  className="grid items-center gap-x-2 gap-y-1 text-xs"
+                  style={{
+                    gridTemplateColumns: `minmax(0, 1fr) repeat(${colCount}, auto)`,
+                  }}
+                >
+                  <div />
+                  <ColHead title="Entitlement">Ent</ColHead>
+                  {extras && <ColHead title="Brought forward from last year">B/F</ColHead>}
+                  {extras && <ColHead title="In-lieu days">I/L</ColHead>}
+                  <ColHead
+                    title={
+                      extras
+                        ? "Balance = Ent + B/F + I/L − Taken"
+                        : "Balance = Ent − Taken"
+                    }
+                  >
+                    Bal
+                  </ColHead>
+                  {members.map((m) => {
+                    const t = (taken.get(m.id) ?? emptyTaken())[cat];
+                    const b = balanceMap.get(m.id) ?? emptyBalance(m.id, year);
+                    const bal = available(b, cat) - t;
+                    return (
+                      <Row
+                        key={m.id}
+                        name={m.name}
+                        ent={entitlement(b, cat)}
+                        carry={extras ? carryForward(b, cat) : undefined}
+                        lieu={extras ? inLieu(b, cat) : undefined}
+                        taken={t}
+                        bal={bal}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
             );
           })}
         </div>
@@ -105,25 +141,52 @@ export default function MemberSummary({ members, entries }: Props) {
   );
 }
 
-function FragmentRow({
+function ColHead({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <div
+      title={title}
+      className="text-[10px] uppercase tracking-wider text-muted text-right tabular-nums"
+    >
+      {children}
+    </div>
+  );
+}
+
+function Row({
   name,
-  annual,
-  family,
-  medical,
+  ent,
+  carry,
+  lieu,
+  taken,
+  bal,
 }: {
   name: string;
-  annual: number;
-  family: number;
-  medical: number;
+  ent: number;
+  carry?: number;
+  lieu?: number;
+  taken: number;
+  bal: number;
 }) {
   return (
     <>
       <div className="truncate text-ink/90" title={name}>
         {name}
       </div>
-      <div className="text-right tabular-nums text-ink/80">{fmt(annual)}</div>
-      <div className="text-right tabular-nums text-ink/80">{fmt(family)}</div>
-      <div className="text-right tabular-nums text-ink/80">{fmt(medical)}</div>
+      <Cell value={ent} />
+      {carry !== undefined && <Cell value={carry} />}
+      {lieu !== undefined && <Cell value={lieu} />}
+      <div
+        className={`text-right tabular-nums font-medium ${
+          bal < 0 ? "text-red-600" : "text-ink"
+        }`}
+        title={`Taken ${fmt(taken)}`}
+      >
+        {fmt(bal)}
+      </div>
     </>
   );
+}
+
+function Cell({ value }: { value: number }) {
+  return <div className="text-right tabular-nums text-ink/80">{fmt(value)}</div>;
 }

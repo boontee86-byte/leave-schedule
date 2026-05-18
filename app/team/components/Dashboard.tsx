@@ -6,12 +6,20 @@ import { addYears, startOfYear, endOfYear } from "date-fns";
 import { expandRange, fromISO, isWeekend, toISO } from "@/lib/dates";
 import { LEAVE_META } from "@/lib/colors";
 import { isPublicHoliday } from "@/lib/holidays";
-import type { LeaveEntry, Member, ImportantDate, Range, TeamData } from "./types";
+import type {
+  LeaveEntry,
+  Member,
+  MemberBalance,
+  ImportantDate,
+  Range,
+  TeamData,
+} from "./types";
 import Grid from "./Grid";
 import Legend, { type PaintMode } from "./Legend";
 import MemberSummary from "./MemberSummary";
 import MemberDialog from "./MemberDialog";
 import ImportantDateDialog from "./ImportantDateDialog";
+import BalanceDialog from "./BalanceDialog";
 import YearPicker from "./YearPicker";
 import MemberFilter from "./MemberFilter";
 
@@ -27,6 +35,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
   const [loading, setLoading] = useState(true);
   const [paintMode, setPaintMode] = useState<PaintMode>(null);
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
+  const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
   const [importantOpen, setImportantOpen] = useState<
     { date?: string; editing?: ImportantDate } | null
   >(null);
@@ -94,6 +103,11 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
     [data],
   );
   const important = useMemo<ImportantDate[]>(() => data?.important_dates ?? [], [data]);
+  const balances = useMemo<MemberBalance[]>(() => data?.balances ?? [], [data]);
+  const year = useMemo(
+    () => data?.year ?? fromISO(range.from).getFullYear(),
+    [data, range.from],
+  );
 
   useEffect(() => {
     if (memberFilter.length === 0) return;
@@ -217,6 +231,12 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
               Members
             </button>
             <button
+              onClick={() => setBalanceDialogOpen(true)}
+              className="rounded-full border border-line bg-white text-sm px-4 py-2 hover:bg-canvas"
+            >
+              Balances
+            </button>
+            <button
               onClick={logout}
               className="hidden sm:inline-flex rounded-full border border-line bg-white text-sm px-3 py-2 text-muted hover:bg-canvas"
               title="Sign out"
@@ -268,7 +288,12 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
               onEditImportant={(d) => setImportantOpen({ editing: d })}
               onReload={() => reload()}
             />
-            <MemberSummary members={visibleMembers} entries={entries} />
+            <MemberSummary
+              members={visibleMembers}
+              entries={entries}
+              balances={balances}
+              year={year}
+            />
           </div>
         </div>
       </main>
@@ -277,6 +302,15 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
         <MemberDialog
           members={members}
           onClose={() => setMemberDialogOpen(false)}
+          onChanged={() => reload()}
+        />
+      )}
+      {balanceDialogOpen && (
+        <BalanceDialog
+          members={members}
+          balances={balances}
+          year={year}
+          onClose={() => setBalanceDialogOpen(false)}
           onChanged={() => reload()}
         />
       )}

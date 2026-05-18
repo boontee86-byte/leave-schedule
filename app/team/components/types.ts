@@ -18,11 +18,23 @@ export type ImportantDate = {
   notes: string | null;
 };
 
+export type MemberBalance = {
+  member_id: string;
+  year: number;
+  entitlement_annual: number;
+  entitlement_medical: number;
+  entitlement_childcare: number;
+  carry_forward_annual: number;
+  in_lieu_annual: number;
+};
+
 export type TeamData = {
   team: { id: string; name: string };
   members: Member[];
   leave_entries: LeaveEntry[];
   important_dates: ImportantDate[];
+  balances: MemberBalance[];
+  year: number;
 };
 
 export type Range = { from: string; to: string };

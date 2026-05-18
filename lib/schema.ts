@@ -62,3 +62,19 @@ export const dataQuerySchema = z.object({
   from: isoDate,
   to: isoDate,
 });
+
+const nonNegDays = z.number().min(0).max(365);
+
+const balanceRowSchema = z.object({
+  member_id: z.string().uuid(),
+  entitlement_annual: nonNegDays,
+  entitlement_medical: nonNegDays,
+  entitlement_childcare: nonNegDays,
+  carry_forward_annual: nonNegDays,
+  in_lieu_annual: nonNegDays,
+});
+
+export const balanceUpsertSchema = z.object({
+  year: z.number().int().min(2020).max(2100),
+  balances: z.array(balanceRowSchema).max(200),
+});
