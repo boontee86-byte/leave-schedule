@@ -90,22 +90,23 @@ export default function MemberSummary({ members, entries, balances, year }: Prop
         <div className="space-y-4">
           {CATEGORIES.map((cat, idx) => {
             const extras = hasExtras(cat);
-            const colCount = extras ? 4 : 2;
+            const colCount = extras ? 5 : 3;
             return (
               <section key={cat} className={idx > 0 ? "pt-3 border-t border-line" : ""}>
                 <h3 className="text-xs font-medium text-ink/90 mb-1.5">
                   {CATEGORY_LABEL[cat]}
                 </h3>
                 <div
-                  className="grid items-center gap-x-2 gap-y-1 text-xs"
+                  className="grid items-center gap-x-1.5 gap-y-1 text-xs"
                   style={{
-                    gridTemplateColumns: `minmax(0, 1fr) repeat(${colCount}, auto)`,
+                    gridTemplateColumns: `minmax(0, 1fr) repeat(${colCount}, 1.875rem)`,
                   }}
                 >
                   <div />
                   <ColHead title="Entitlement">Ent</ColHead>
                   {extras && <ColHead title="Brought forward from last year">B/F</ColHead>}
                   {extras && <ColHead title="In-lieu days">I/L</ColHead>}
+                  <ColHead title="Leave days taken so far">Tkn</ColHead>
                   <ColHead
                     title={
                       extras
@@ -175,11 +176,11 @@ function Row({
       <Cell value={ent} />
       {carry !== undefined && <Cell value={carry} />}
       {lieu !== undefined && <Cell value={lieu} />}
+      <Cell value={taken} />
       <div
         className={`text-right tabular-nums font-medium ${
           bal < 0 ? "text-red-600" : "text-ink"
         }`}
-        title={`Taken ${fmt(taken)}`}
       >
         {fmt(bal)}
       </div>
