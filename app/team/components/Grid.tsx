@@ -72,12 +72,28 @@ export default function Grid({
   }, [important]);
 
   const dragRef = useRef<{ memberId: string; startISO: string; currentISO: string } | null>(null);
+  const longPressRef = useRef<{
+    memberId: string;
+    iso: string;
+    startX: number;
+    startY: number;
+    pointerId: number;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
   const lastClickRef = useRef<{ memberId: string; iso: string } | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const paintModeRef = useRef(paintMode);
   useEffect(() => {
     paintModeRef.current = paintMode;
   }, [paintMode]);
+
+  const clearLongPress = useCallback(() => {
+    const lp = longPressRef.current;
+    if (lp) {
+      clearTimeout(lp.timer);
+      longPressRef.current = null;
+    }
+  }, []);
 
   const commitDrag = useCallback(() => {
     const drag = dragRef.current;
@@ -96,6 +112,7 @@ export default function Grid({
       if (dragRef.current) commitDrag();
     }
     function onPointerCancel() {
+      clearLongPress();
       dragRef.current = null;
       setPreview(null);
     }
@@ -105,15 +122,18 @@ export default function Grid({
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
     };
-  }, [commitDrag]);
+  }, [commitDrag, clearLongPress]);
 
-  // Cancel any in-flight drag if paint mode is cleared (e.g., user pressed Esc).
+  // Cancel any in-flight drag/long-press if paint mode is cleared (e.g., user pressed Esc).
   useEffect(() => {
-    if (paintMode === null && dragRef.current) {
-      dragRef.current = null;
-      setPreview(null);
+    if (paintMode === null) {
+      clearLongPress();
+      if (dragRef.current) {
+        dragRef.current = null;
+        setPreview(null);
+      }
     }
-  }, [paintMode]);
+  }, [paintMode, clearLongPress]);
 
   const handleCellPointerDown = useCallback(
     (memberId: string, iso: string, e: React.PointerEvent) => {
@@ -122,15 +142,12 @@ export default function Grid({
       // Suppress browser native drag/selection so paint feels native.
       e.preventDefault();
 
-      // Touch / pen / anything not mouse — paint the tapped cell only, no drag.
-      if (e.pointerType !== "mouse") {
-        onPaint(memberId, iso, iso, mode);
-        lastClickRef.current = { memberId, iso };
-        return;
-      }
-
-      // Shift+click range from last click on the same row.
-      if (e.shiftKey && lastClickRef.current?.memberId === memberId) {
+      // Shift+click range from last click on the same row (mouse only).
+      if (
+        e.pointerType === "mouse" &&
+        e.shiftKey &&
+        lastClickRef.current?.memberId === memberId
+      ) {
         const anchor = lastClickRef.current.iso;
         const from = anchor < iso ? anchor : iso;
         const to = anchor < iso ? iso : anchor;
@@ -139,27 +156,87 @@ export default function Grid({
         return;
       }
 
-      // Start drag.
-      dragRef.current = { memberId, startISO: iso, currentISO: iso };
-      setPreview({ memberId, from: iso, to: iso });
       try {
         (e.currentTarget as Element).setPointerCapture(e.pointerId);
       } catch {
         // setPointerCapture can throw if the element is already released — ignore.
       }
+
+      if (e.pointerType === "mouse") {
+        // Desktop: drag starts immediately.
+        dragRef.current = { memberId, startISO: iso, currentISO: iso };
+        setPreview({ memberId, from: iso, to: iso });
+        return;
+      }
+
+      // Touch / pen: long-press to enter drag mode; short tap paints a single cell.
+      clearLongPress();
+      const pointerId = e.pointerId;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const timer = setTimeout(() => {
+        const lp = longPressRef.current;
+        if (!lp || lp.pointerId !== pointerId) return;
+        longPressRef.current = null;
+        dragRef.current = { memberId, startISO: iso, currentISO: iso };
+        setPreview({ memberId, from: iso, to: iso });
+        try {
+          navigator.vibrate?.(15);
+        } catch {
+          // vibrate may be unavailable or rejected — ignore.
+        }
+      }, 400);
+      longPressRef.current = { memberId, iso, startX, startY, pointerId, timer };
+    },
+    [onPaint, clearLongPress],
+  );
+
+  const handleCellPointerMove = useCallback((e: React.PointerEvent) => {
+    // Long-press pending: cancel if the finger drifts before the timer fires.
+    const lp = longPressRef.current;
+    if (lp && lp.pointerId === e.pointerId) {
+      if (Math.abs(e.clientX - lp.startX) + Math.abs(e.clientY - lp.startY) > 6) {
+        clearTimeout(lp.timer);
+        longPressRef.current = null;
+      }
+      return;
+    }
+
+    // Active drag: hit-test the cell under the pointer (works across month sections).
+    const drag = dragRef.current;
+    if (!drag) return;
+    const hit = document
+      .elementFromPoint(e.clientX, e.clientY)
+      ?.closest("[data-day-iso][data-member-id]") as HTMLElement | null;
+    if (!hit) return;
+    const targetMember = hit.dataset.memberId;
+    const targetISO = hit.dataset.dayIso;
+    if (!targetMember || !targetISO) return;
+    if (targetMember !== drag.memberId) return;
+    if (drag.currentISO === targetISO) return;
+    drag.currentISO = targetISO;
+    const from = drag.startISO < targetISO ? drag.startISO : targetISO;
+    const to = drag.startISO < targetISO ? targetISO : drag.startISO;
+    setPreview({ memberId: drag.memberId, from, to });
+  }, []);
+
+  const handleCellPointerUp = useCallback(
+    (memberId: string, iso: string, e: React.PointerEvent) => {
+      const lp = longPressRef.current;
+      if (lp && lp.pointerId === e.pointerId) {
+        // Tap completed before the long-press timer fired — paint the single cell.
+        clearTimeout(lp.timer);
+        longPressRef.current = null;
+        const mode = paintModeRef.current;
+        if (mode) {
+          onPaint(memberId, iso, iso, mode);
+          lastClickRef.current = { memberId, iso };
+        }
+      }
+      // Active-drag commit is handled by the window pointerup listener.
     },
     [onPaint],
   );
-
-  const handleCellPointerEnter = useCallback((memberId: string, iso: string) => {
-    const drag = dragRef.current;
-    if (!drag || drag.memberId !== memberId) return;
-    if (drag.currentISO === iso) return;
-    drag.currentISO = iso;
-    const from = drag.startISO < iso ? drag.startISO : iso;
-    const to = drag.startISO < iso ? iso : drag.startISO;
-    setPreview({ memberId, from, to });
-  }, []);
 
   const interactive = paintMode !== null;
   const todayISO = useMemo(() => toISO(new Date()), []);
@@ -179,7 +256,8 @@ export default function Grid({
           interactive={interactive}
           todayISO={todayISO}
           onCellPointerDown={handleCellPointerDown}
-          onCellPointerEnter={handleCellPointerEnter}
+          onCellPointerMove={handleCellPointerMove}
+          onCellPointerUp={handleCellPointerUp}
           onDateLabelClick={onDateLabelClick}
         />
       ))}
@@ -198,7 +276,8 @@ function MonthGrid({
   interactive,
   todayISO,
   onCellPointerDown,
-  onCellPointerEnter,
+  onCellPointerMove,
+  onCellPointerUp,
   onDateLabelClick,
 }: {
   label: string;
@@ -211,7 +290,8 @@ function MonthGrid({
   interactive: boolean;
   todayISO: string;
   onCellPointerDown: (memberId: string, iso: string, e: React.PointerEvent) => void;
-  onCellPointerEnter: (memberId: string, iso: string) => void;
+  onCellPointerMove: (e: React.PointerEvent) => void;
+  onCellPointerUp: (memberId: string, iso: string, e: React.PointerEvent) => void;
   onDateLabelClick: (date: string) => void;
 }) {
   const colTemplate = `${MEMBER_COL_VAR} repeat(${days.length}, ${CELL}px)`;
@@ -311,7 +391,8 @@ function MonthGrid({
               preview={preview?.memberId === m.id ? preview : null}
               interactive={interactive}
               onCellPointerDown={onCellPointerDown}
-              onCellPointerEnter={onCellPointerEnter}
+              onCellPointerMove={onCellPointerMove}
+              onCellPointerUp={onCellPointerUp}
             />
           ))}
         </div>
@@ -328,7 +409,8 @@ function MemberRow({
   preview,
   interactive,
   onCellPointerDown,
-  onCellPointerEnter,
+  onCellPointerMove,
+  onCellPointerUp,
 }: {
   member: Member;
   days: Date[];
@@ -337,7 +419,8 @@ function MemberRow({
   preview: PreviewState | null;
   interactive: boolean;
   onCellPointerDown: (memberId: string, iso: string, e: React.PointerEvent) => void;
-  onCellPointerEnter: (memberId: string, iso: string) => void;
+  onCellPointerMove: (e: React.PointerEvent) => void;
+  onCellPointerUp: (memberId: string, iso: string, e: React.PointerEvent) => void;
 }) {
   return (
     <>
@@ -366,7 +449,8 @@ function MemberRow({
             inPreview={inPreview}
             interactive={interactive}
             onCellPointerDown={onCellPointerDown}
-            onCellPointerEnter={onCellPointerEnter}
+            onCellPointerMove={onCellPointerMove}
+            onCellPointerUp={onCellPointerUp}
           />
         );
       })}
@@ -384,7 +468,8 @@ const DayCell = memo(function DayCell({
   inPreview,
   interactive,
   onCellPointerDown,
-  onCellPointerEnter,
+  onCellPointerMove,
+  onCellPointerUp,
 }: {
   memberId: string;
   iso: string;
@@ -395,7 +480,8 @@ const DayCell = memo(function DayCell({
   inPreview: boolean;
   interactive: boolean;
   onCellPointerDown: (memberId: string, iso: string, e: React.PointerEvent) => void;
-  onCellPointerEnter: (memberId: string, iso: string) => void;
+  onCellPointerMove: (e: React.PointerEvent) => void;
+  onCellPointerUp: (memberId: string, iso: string, e: React.PointerEvent) => void;
 }) {
   const baseStyle: React.CSSProperties = {
     width: CELL,
@@ -444,13 +530,16 @@ const DayCell = memo(function DayCell({
   return (
     <div
       data-paint-cell=""
+      data-member-id={memberId}
+      data-day-iso={iso}
       onPointerDown={
         interactive
           ? (e) => onCellPointerDown(memberId, iso, e)
           : undefined
       }
-      onPointerEnter={
-        interactive ? () => onCellPointerEnter(memberId, iso) : undefined
+      onPointerMove={interactive ? onCellPointerMove : undefined}
+      onPointerUp={
+        interactive ? (e) => onCellPointerUp(memberId, iso, e) : undefined
       }
       title={tooltip}
       aria-label={empty ? `Empty day ${iso}` : tooltip}
