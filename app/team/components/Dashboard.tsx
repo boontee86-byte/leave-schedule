@@ -15,11 +15,12 @@ import type {
   TeamData,
 } from "./types";
 import Grid from "./Grid";
-import Legend, { LeavePalette, type PaintMode } from "./Legend";
+import { LeavePalette, type PaintMode } from "./Legend";
 import MemberSummary from "./MemberSummary";
 import MemberDialog from "./MemberDialog";
 import ImportantDateDialog from "./ImportantDateDialog";
 import BalanceDialog from "./BalanceDialog";
+import DatesDialog from "./DatesDialog";
 import YearPicker from "./YearPicker";
 import MemberFilter from "./MemberFilter";
 
@@ -36,6 +37,7 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
   const [paintMode, setPaintMode] = useState<PaintMode>(null);
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
   const [balanceDialogOpen, setBalanceDialogOpen] = useState(false);
+  const [datesDialogOpen, setDatesDialogOpen] = useState(false);
   const [importantOpen, setImportantOpen] = useState<
     { date?: string; editing?: ImportantDate } | null
   >(null);
@@ -219,10 +221,11 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
               onReload={() => reload()}
             />
             <button
-              onClick={() => setImportantOpen({})}
+              onClick={() => setDatesDialogOpen(true)}
+              title="View important dates and public holidays"
               className="rounded-full border border-line bg-white text-sm px-4 py-2 hover:bg-canvas"
             >
-              Important date
+              Dates
             </button>
             <button
               onClick={() => setMemberDialogOpen(true)}
@@ -246,11 +249,9 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
           </div>
         </div>
         <LeavePalette
-          range={range}
           paintMode={paintMode}
           onSetPaintMode={setPaintMode}
-          compact
-          className="lg:hidden mt-3"
+          className="mt-3"
         />
       </header>
 
@@ -287,14 +288,6 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
           </section>
 
           <div className="lg:sticky lg:top-[88px] space-y-4 h-fit max-w-sm lg:max-w-none">
-            <Legend
-              range={range}
-              important={important}
-              paintMode={paintMode}
-              onSetPaintMode={setPaintMode}
-              onEditImportant={(d) => setImportantOpen({ editing: d })}
-              onReload={() => reload()}
-            />
             <MemberSummary
               members={visibleMembers}
               entries={entries}
@@ -319,6 +312,16 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
           year={year}
           onClose={() => setBalanceDialogOpen(false)}
           onChanged={() => reload()}
+        />
+      )}
+      {datesDialogOpen && (
+        <DatesDialog
+          range={range}
+          important={important}
+          onClose={() => setDatesDialogOpen(false)}
+          onEditImportant={(d) => setImportantOpen({ editing: d })}
+          onAddImportant={() => setImportantOpen({})}
+          onReload={() => reload()}
         />
       )}
       {importantOpen && (
