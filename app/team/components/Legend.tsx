@@ -55,6 +55,124 @@ function chipFillStyle(type: LeaveType): React.CSSProperties {
   return { backgroundColor: color };
 }
 
+type LeavePaletteProps = {
+  range: Range;
+  paintMode: PaintMode;
+  onSetPaintMode: (m: PaintMode) => void;
+  compact?: boolean;
+  className?: string;
+};
+
+export function LeavePalette({
+  range,
+  paintMode,
+  onSetPaintMode,
+  compact = false,
+  className,
+}: LeavePaletteProps) {
+  function toggleChip(type: LeaveType) {
+    if (paintMode?.kind === "paint" && paintMode.leave_type === type) {
+      onSetPaintMode(null);
+    } else {
+      onSetPaintMode({ kind: "paint", leave_type: type });
+    }
+  }
+
+  function toggleEraser() {
+    if (paintMode?.kind === "erase") onSetPaintMode(null);
+    else onSetPaintMode({ kind: "erase" });
+  }
+
+  const isActive = (type: LeaveType) =>
+    paintMode?.kind === "paint" && paintMode.leave_type === type;
+  const isEraserActive = paintMode?.kind === "erase";
+
+  return (
+    <aside
+      data-legend-root
+      className={`rounded-xl2 border border-line bg-white shadow-soft h-fit ${
+        compact ? "p-2" : "p-3 sm:p-4"
+      }${className ? ` ${className}` : ""}`}
+    >
+      {!compact && (
+        <>
+          <div className="text-xs uppercase tracking-wider text-muted mb-1">Year</div>
+          <div className="text-sm mb-3 text-ink/90 tabular-nums">
+            {range.from} → {range.to}
+          </div>
+
+          <div className="text-xs uppercase tracking-wider text-muted mb-1">Paint leave</div>
+          <div className="text-[11px] text-muted mb-2 leading-snug">
+            Click a chip, then click or drag on the calendar. Shift-click for ranges. Esc or click outside to exit.
+          </div>
+        </>
+      )}
+
+      <ul className="space-y-1.5">
+        {CHIP_GROUPS.map((g) => (
+          <li key={g.key} className="flex items-center gap-2 text-[12px]">
+            <span className="flex-1 min-w-0 text-ink/85 whitespace-nowrap">{g.label}</span>
+            <div
+              className="grid shrink-0"
+              style={{ gridTemplateColumns: "repeat(3, 34px)", gap: 4 }}
+            >
+              <ChipButton
+                type={g.full}
+                label="Full"
+                active={isActive(g.full)}
+                onClick={() => toggleChip(g.full)}
+              />
+              {g.am ? (
+                <ChipButton
+                  type={g.am}
+                  label="AM"
+                  active={isActive(g.am)}
+                  onClick={() => toggleChip(g.am!)}
+                />
+              ) : (
+                <span aria-hidden />
+              )}
+              {g.pm ? (
+                <ChipButton
+                  type={g.pm}
+                  label="PM"
+                  active={isActive(g.pm)}
+                  onClick={() => toggleChip(g.pm!)}
+                />
+              ) : (
+                <span aria-hidden />
+              )}
+            </div>
+          </li>
+        ))}
+        <li className="flex items-center gap-2 text-[12px] pt-1">
+          <span className="flex-1 min-w-0 text-ink/85 whitespace-nowrap">Eraser</span>
+          <div
+            className="grid shrink-0"
+            style={{ gridTemplateColumns: "repeat(3, 34px)", gap: 4 }}
+          >
+            <button
+              type="button"
+              onClick={toggleEraser}
+              title="Erase leave on click/drag"
+              aria-pressed={isEraserActive}
+              className={`inline-flex items-center justify-center h-[22px] w-full min-w-[34px] rounded border text-[13px] leading-none transition ${
+                isEraserActive
+                  ? "ring-2 ring-ink/60 ring-offset-1 border-ink/40 bg-canvas"
+                  : "border-line bg-white hover:bg-canvas"
+              }`}
+            >
+              <span aria-hidden>🧽</span>
+            </button>
+            <span aria-hidden />
+            <span aria-hidden />
+          </div>
+        </li>
+      </ul>
+    </aside>
+  );
+}
+
 export default function Legend({
   range,
   important,
@@ -100,98 +218,14 @@ export default function Legend({
     }
   }
 
-  function toggleChip(type: LeaveType) {
-    if (paintMode?.kind === "paint" && paintMode.leave_type === type) {
-      onSetPaintMode(null);
-    } else {
-      onSetPaintMode({ kind: "paint", leave_type: type });
-    }
-  }
-
-  function toggleEraser() {
-    if (paintMode?.kind === "erase") onSetPaintMode(null);
-    else onSetPaintMode({ kind: "erase" });
-  }
-
-  const isActive = (type: LeaveType) =>
-    paintMode?.kind === "paint" && paintMode.leave_type === type;
-  const isEraserActive = paintMode?.kind === "erase";
-
   return (
     <div className="space-y-4" data-legend-root>
-      <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
-        <div className="text-xs uppercase tracking-wider text-muted mb-1">Year</div>
-        <div className="text-sm mb-3 text-ink/90 tabular-nums">
-          {range.from} → {range.to}
-        </div>
-
-        <div className="text-xs uppercase tracking-wider text-muted mb-1">Paint leave</div>
-        <div className="text-[11px] text-muted mb-2 leading-snug">
-          Click a chip, then click or drag on the calendar. Shift-click for ranges. Esc or click outside to exit.
-        </div>
-
-        <ul className="space-y-1.5">
-          {CHIP_GROUPS.map((g) => (
-            <li key={g.key} className="flex items-center gap-2 text-[12px]">
-              <span className="flex-1 min-w-0 text-ink/85 whitespace-nowrap">{g.label}</span>
-              <div
-                className="grid shrink-0"
-                style={{ gridTemplateColumns: "repeat(3, 34px)", gap: 4 }}
-              >
-                <ChipButton
-                  type={g.full}
-                  label="Full"
-                  active={isActive(g.full)}
-                  onClick={() => toggleChip(g.full)}
-                />
-                {g.am ? (
-                  <ChipButton
-                    type={g.am}
-                    label="AM"
-                    active={isActive(g.am)}
-                    onClick={() => toggleChip(g.am!)}
-                  />
-                ) : (
-                  <span aria-hidden />
-                )}
-                {g.pm ? (
-                  <ChipButton
-                    type={g.pm}
-                    label="PM"
-                    active={isActive(g.pm)}
-                    onClick={() => toggleChip(g.pm!)}
-                  />
-                ) : (
-                  <span aria-hidden />
-                )}
-              </div>
-            </li>
-          ))}
-          <li className="flex items-center gap-2 text-[12px] pt-1">
-            <span className="flex-1 min-w-0 text-ink/85 whitespace-nowrap">Eraser</span>
-            <div
-              className="grid shrink-0"
-              style={{ gridTemplateColumns: "repeat(3, 34px)", gap: 4 }}
-            >
-              <button
-                type="button"
-                onClick={toggleEraser}
-                title="Erase leave on click/drag"
-                aria-pressed={isEraserActive}
-                className={`inline-flex items-center justify-center h-[22px] w-full min-w-[34px] rounded border text-[13px] leading-none transition ${
-                  isEraserActive
-                    ? "ring-2 ring-ink/60 ring-offset-1 border-ink/40 bg-canvas"
-                    : "border-line bg-white hover:bg-canvas"
-                }`}
-              >
-                <span aria-hidden>🧽</span>
-              </button>
-              <span aria-hidden />
-              <span aria-hidden />
-            </div>
-          </li>
-        </ul>
-      </aside>
+      <LeavePalette
+        range={range}
+        paintMode={paintMode}
+        onSetPaintMode={onSetPaintMode}
+        className="hidden lg:block"
+      />
 
       <aside className="rounded-xl2 border border-line bg-white shadow-soft p-3 sm:p-4 h-fit">
         <button

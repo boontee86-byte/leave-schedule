@@ -15,7 +15,7 @@ import type {
   TeamData,
 } from "./types";
 import Grid from "./Grid";
-import Legend, { type PaintMode } from "./Legend";
+import Legend, { LeavePalette, type PaintMode } from "./Legend";
 import MemberSummary from "./MemberSummary";
 import MemberDialog from "./MemberDialog";
 import ImportantDateDialog from "./ImportantDateDialog";
@@ -245,6 +245,13 @@ export default function Dashboard({ initialTeam, initialRange }: Props) {
             </button>
           </div>
         </div>
+        <LeavePalette
+          range={range}
+          paintMode={paintMode}
+          onSetPaintMode={setPaintMode}
+          compact
+          className="lg:hidden mt-3"
+        />
       </header>
 
       <main className="px-4 sm:px-6 py-5">
