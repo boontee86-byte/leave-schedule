@@ -24,6 +24,12 @@ const CHIP_GROUPS: CategoryGroup[] = [
   { key: "annual",    label: "Annual",    full: "full_day",       am: "half_day_am",  pm: "half_day_pm" },
   { key: "medical",   label: "Medical",   full: "medical",        am: "medical_am",   pm: "medical_pm" },
   { key: "childcare", label: "Family/Childcare", full: "childcare",      am: "childcare_am", pm: "childcare_pm" },
+  { key: "parental",         label: "Parental",         full: "parental",         am: "parental_am",         pm: "parental_pm" },
+  { key: "hospitalisation",  label: "Hospitalisation",  full: "hospitalisation",  am: "hospitalisation_am",  pm: "hospitalisation_pm" },
+  { key: "compassionate",    label: "Compassionate",    full: "compassionate",    am: "compassionate_am",    pm: "compassionate_pm" },
+  { key: "national_service", label: "National Service", full: "national_service", am: "national_service_am", pm: "national_service_pm" },
+  { key: "marriage",         label: "Marriage",         full: "marriage",         am: "marriage_am",         pm: "marriage_pm" },
+  { key: "exam_study",       label: "Exam/Study",       full: "exam_study",       am: "exam_study_am",       pm: "exam_study_pm" },
   { key: "block",     label: "Mandatory", full: "full_day_block" },
 ];
 
