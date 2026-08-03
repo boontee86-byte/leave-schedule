@@ -1,6 +1,7 @@
 // Singapore public holidays. Source:
 // https://www.mom.gov.sg/employment-practices/public-holidays
-// Only 2026 is published; extend this list when 2027 is released.
+// 2026 and 2027 are published; extend this list when 2028 is released.
+// Holidays falling on a Sunday get an "(observed)" entry on the Monday.
 
 export type PublicHoliday = { date: string; label: string };
 
@@ -19,6 +20,18 @@ export const SG_PUBLIC_HOLIDAYS: PublicHoliday[] = [
   { date: "2026-11-08", label: "Deepavali" },
   { date: "2026-11-09", label: "Deepavali (observed)" },
   { date: "2026-12-25", label: "Christmas Day" },
+  { date: "2027-01-01", label: "New Year's Day" },
+  { date: "2027-02-06", label: "Chinese New Year" },
+  { date: "2027-02-07", label: "Chinese New Year" },
+  { date: "2027-02-08", label: "Chinese New Year (observed)" },
+  { date: "2027-03-10", label: "Hari Raya Puasa" },
+  { date: "2027-03-26", label: "Good Friday" },
+  { date: "2027-05-01", label: "Labour Day" },
+  { date: "2027-05-17", label: "Hari Raya Haji" },
+  { date: "2027-05-20", label: "Vesak Day" },
+  { date: "2027-08-09", label: "National Day" },
+  { date: "2027-10-28", label: "Deepavali" },
+  { date: "2027-12-25", label: "Christmas Day" },
 ];
 
 const HOLIDAY_BY_DATE = new Map<string, PublicHoliday>(
